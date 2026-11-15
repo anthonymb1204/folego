@@ -20,7 +20,7 @@ namespace Folego
 {
     class MainForm : Form
     {
-        const string Versao = "0.17.0";
+        const string Versao = "0.18.0";
         const string Repo = "https://github.com/anthonymb1204/folego";
 
         // ---------------- Cores e fontes ----------------
@@ -32,7 +32,7 @@ namespace Folego
 
         const string GHome = "", GGame = "", GStart = "", GSettings = "", GShield = "",
             GMem = "", GCpu = "", GDrive = "", GPulse = "", GBroom = "", GPlay = "",
-            GClose = "", GAdd = "", GRefresh = "", GInfo = "", GClock = "\uE823", GSpeed = "\uEC4A", GPhone = "\uE8EA", GBell = "\uEA8F", GNet = "\uE839";
+            GClose = "", GAdd = "", GRefresh = "", GInfo = "", GClock = "\uE823", GSpeed = "\uEC4A", GPhone = "\uE8EA", GBell = "\uEA8F", GNet = "\uE839", GHeart = "\uE95E";
 
         static readonly CultureInfo Pt = new CultureInfo("pt-BR");
         static readonly string IconFamily = HasFont("Segoe Fluent Icons") ? "Segoe Fluent Icons" : "Segoe MDL2 Assets";
@@ -189,6 +189,7 @@ namespace Folego
                 if (tickN % 3 == 0 || DateTime.Now >= wpSoon) { wpSoon = DateTime.MaxValue; CheckWallpaper(); }
                 if (tickN % 15 == 0 && page == 0 && Visible) RefreshList();
                 if (tickN % 3600 == 0) ChecarDriverAmd(false);
+                if (tickN == 30 || tickN % 3600 == 0) LoadSaude(); // avisos de disco cheio ou com problema
                 if (tickN == 20 || tickN % 21600 == 0) ChecarAtualizacao(); // 20 s depois de abrir e a cada 6 h
                 if (testeUpd && tickN == 5) ChecarAtualizacao();          // --testar-atualizacao: confere e atualiza sozinho (testes)
                 if (testeUpd && novaVersao != null && !atualizando) Atualizar();
@@ -266,6 +267,7 @@ namespace Folego
             System.Threading.Thread.Sleep(500);
             for (int i = 0; i < 3; i++) MedirPingSync();
             if (pagina == 4) { limp = Limpeza.Categorias(); foreach (Categoria c in limp) c.Bytes = Limpeza.Medir(c); }
+            if (pagina == 5) { discos = Saude.Discos(); unidades = Saude.Unidades(); }
             ReadStats();
             if (Environment.GetCommandLineArgs().Contains("--demo")) // só para testar o desenho do histórico
                 for (int i = 0; i < HistMax; i++)
@@ -419,6 +421,7 @@ namespace Folego
                 case 2: DrawHeader(g, "Modo Jogo", "O PC se prepara sozinho quando o jogo abre"); DrawGame(g); break;
                 case 3: DrawHeader(g, "Mais FPS", "Windows e placa de vídeo afinados pro jogo"); DrawFps(g); break;
                 case 4: DrawHeader(g, "Limpeza", "Só caches e restos: senhas, histórico e logins ficam"); DrawLimpeza(g); break;
+                case 5: DrawHeader(g, "Saúde", "Discos, espaço e o estado do PC"); DrawSaude(g); break;
                 default: DrawHeader(g, "Ajustes", "Do seu jeito"); DrawSettings(g); break;
             }
             DrawTooltip(g);
@@ -522,13 +525,13 @@ namespace Folego
             Stroke(g, sb, 24, CBorder);
             if (appIcon != null) g.DrawImage(appIcon, sb.X + 16, sb.Y + 18, 36, 36);
 
-            string[] gl = { GHome, GStart, GGame, GSpeed, GBroom, GSettings };
-            string[] nm = { "Início", "Inicialização", "Modo Jogo", "Mais FPS", "Limpeza", "Ajustes" };
+            string[] gl = { GHome, GStart, GGame, GSpeed, GBroom, GHeart, GSettings };
+            string[] nm = { "Início", "Inicialização", "Modo Jogo", "Mais FPS", "Limpeza", "Saúde", "Ajustes" };
             for (int i = 0; i < gl.Length; i++)
             {
                 int idx = i;
                 RectangleF r = new RectangleF(sb.X + 10, sb.Y + 88 + i * 60, 48, 48);
-                bool hov = AddHit(r, "nav" + i, delegate { page = idx; startScroll = 0; if (idx == 1) LoadStartup(); if (idx == 4) MedirLimpeza(); Invalidate(); }, nm[i]);
+                bool hov = AddHit(r, "nav" + i, delegate { page = idx; startScroll = 0; if (idx == 1) LoadStartup(); if (idx == 4) MedirLimpeza(); if (idx == 5) LoadSaude(); Invalidate(); }, nm[i]);
                 if (page == i) FillGrad(g, r, 15, CPurple, CBlue);
                 else if (hov) Fill(g, r, 15, Color.FromArgb(28, 255, 255, 255));
                 Txt(g, gl[i], Ico(15f), page == i ? Color.White : (hov ? CText : CMuted), r, StringAlignment.Center, StringAlignment.Center);
@@ -1382,6 +1385,103 @@ namespace Folego
                 else Engine.Log("Escala nítida: " + escMsg);
             }
             Invalidate();
+        }
+
+        // ---------------- Saúde do PC ----------------
+        List<Disco> discos;
+        List<Unidade> unidades;
+        bool lendoSaude;
+        readonly HashSet<string> saudeAvisada = new HashSet<string>();
+
+        async void LoadSaude()
+        {
+            if (lendoSaude) return;
+            lendoSaude = true;
+            List<Disco> d = null; List<Unidade> u = null;
+            await Task.Run(delegate { d = Saude.Discos(); u = Saude.Unidades(); });
+            discos = d; unidades = u; lendoSaude = false;
+            // Avisos na Atividade (uma vez por vez que o Fôlego abre).
+            foreach (Disco x in discos)
+                if (x.Saude > 0 && saudeAvisada.Add("d" + x.Nome))
+                    AddActivity(DateTime.Now, "Saúde: o disco " + x.Nome + (x.Saude == 2 ? " está com problema" : " pede atenção") + ". Faça backup!", true);
+            foreach (Unidade x in unidades)
+                if (x.Total > 0 && x.Livre / x.Total < 0.1 && saudeAvisada.Add("u" + x.Letra))
+                    AddActivity(DateTime.Now, string.Format(Pt, "Saúde: o {0} está quase cheio ({1:0} GB livres)", x.Letra, x.Livre), true);
+            Invalidate();
+        }
+
+        static string Duracao(TimeSpan t)
+        {
+            if (t.TotalDays >= 1) return string.Format("{0} dia{1} e {2} h", (int)t.TotalDays, (int)t.TotalDays == 1 ? "" : "s", t.Hours);
+            return t.TotalHours >= 1 ? string.Format("{0} h e {1} min", (int)t.TotalHours, t.Minutes) : t.Minutes + " min";
+        }
+
+        void DrawSaude(Graphics g)
+        {
+            if (discos == null) LoadSaude();
+            float x0 = 116, W = ClientSize.Width - 24 - x0, half = (W - 16) / 2, top = 150;
+            int nd = discos == null ? 3 : Math.Max(1, discos.Count);
+            RectangleF dc = new RectangleF(x0, top, W, 64 + nd * 56);
+            float top2 = dc.Bottom + 16;
+            RectangleF ec = new RectangleF(x0, top2, half, ClientSize.Height - 20 - top2), sc = new RectangleF(ec.Right + 16, top2, half, ec.Height);
+
+            Card(g, dc, "Discos", GDrive);
+            RectangleF rb = new RectangleF(dc.Right - 50, dc.Y + 12, 34, 34);
+            if (AddHit(rb, "srefresh2", LoadSaude, "Conferir de novo")) Fill(g, rb, 10, Color.FromArgb(28, 255, 255, 255));
+            Txt(g, GRefresh, Ico(11f), CMuted, rb, StringAlignment.Center, StringAlignment.Center);
+            float y = dc.Y + 54;
+            if (discos == null) Txt(g, "Conferindo os discos...", Reg(10f), CMuted, new RectangleF(dc.X + 20, y, 400, 30));
+            else
+                foreach (Disco d in discos)
+                {
+                    Txt(g, GDrive, Ico(14f), CLilac, new RectangleF(dc.X + 20, y + 6, 30, 34), StringAlignment.Near, StringAlignment.Center);
+                    Txt(g, d.Nome, Semi(11f), CText, new RectangleF(dc.X + 56, y + 2, 420, 24));
+                    List<string> inf = new List<string> { d.Tipo, d.GB >= 1000 ? (d.GB / 1000.0).ToString("0.#", Pt) + " TB" : d.GB + " GB" };
+                    if (d.Horas >= 0) inf.Add(string.Format(Pt, "{0:N0} h ligado (~{1:0.#} anos)", d.Horas, d.Horas / 8760.0));
+                    if (d.Desgaste >= 0) inf.Add("desgaste " + d.Desgaste + "%");
+                    bool velho = d.Tipo == "HD" && d.Horas > 40000;
+                    Txt(g, string.Join("  ·  ", inf) + (velho ? "  ·  muitas horas de uso: faça backup do que importa" : ""), Reg(9f), velho ? COrange : CMuted,
+                        new RectangleF(dc.X + 56, y + 26, dc.Width - 330, 20));
+                    if (d.Temp > 0)
+                        Txt(g, d.Temp + " °C", Semi(11f), d.Temp >= 55 ? CBad : d.Temp >= 45 ? COrange : CText, new RectangleF(dc.Right - 250, y, 90, 50), StringAlignment.Far, StringAlignment.Center);
+                    string sd = d.Saude == 0 ? "Saudável" : d.Saude == 1 ? "Atenção" : d.Saude == 2 ? "Com problema" : "Sem dados";
+                    Color scr = d.Saude == 0 ? CGood : d.Saude == 1 ? COrange : d.Saude == 2 ? CBad : CFaint;
+                    RectangleF pill = new RectangleF(dc.Right - 140, y + 12, 116, 26);
+                    Fill(g, pill, 13, Color.FromArgb(40, scr)); Stroke(g, pill, 13, Color.FromArgb(150, scr));
+                    Txt(g, sd, Reg(9.2f), scr, pill, StringAlignment.Center, StringAlignment.Center);
+                    y += 56;
+                }
+
+            Card(g, ec, "Espaço", GBroom);
+            y = ec.Y + 54;
+            if (unidades != null)
+                foreach (Unidade u in unidades)
+                {
+                    if (y + 44 > ec.Bottom - 8) break;
+                    double uso = u.Total > 0 ? 1 - u.Livre / u.Total : 0;
+                    Txt(g, u.Letra + (string.IsNullOrEmpty(u.Nome) ? "" : "  " + u.Nome), Reg(10f), CText, new RectangleF(ec.X + 20, y, 220, 22));
+                    Txt(g, string.Format(Pt, "{0:0} GB livres de {1:0}", u.Livre, u.Total), Reg(9.5f), uso > 0.9 ? CBad : CMuted,
+                        new RectangleF(ec.X + 20, y, ec.Width - 40, 22), StringAlignment.Far);
+                    Bar(g, new RectangleF(ec.X + 20, y + 26, ec.Width - 40, 6), uso, uso > 0.9);
+                    y += 46;
+                }
+
+            Card(g, sc, "Sistema", GHeart);
+            TimeSpan lig = Saude.Ligado();
+            y = sc.Y + 54;
+            Txt(g, "Ligado há " + Duracao(lig), Reg(10.5f), CText, new RectangleF(sc.X + 20, y, sc.Width - 40, 22));
+            Txt(g, lig.TotalDays >= 7 ? "Faz tempo! Reiniciar de vez em quando deixa o Windows mais leve." : "Reiniciar de vez em quando deixa o Windows mais leve.",
+                Reg(8.8f), lig.TotalDays >= 7 ? COrange : CMuted, new RectangleF(sc.X + 20, y + 22, sc.Width - 40, 20));
+            y += 52;
+            Txt(g, string.Format(Pt, "Memória: {0:0} GB", ramTotal), Reg(10.5f), CText, new RectangleF(sc.X + 20, y, sc.Width - 40, 22));
+            Txt(g, ramTotal < 12 ? "Pouco para jogo + navegador + Discord juntos: 16 GB faria muita diferença." : "Bom para jogar com outros programas abertos.",
+                Reg(8.8f), ramTotal < 12 ? COrange : CMuted, new RectangleF(sc.X + 20, y + 22, sc.Width - 40, 36), StringAlignment.Near, StringAlignment.Near, true);
+            y += 60;
+            if (gpuName != null)
+            {
+                Txt(g, "Placa de vídeo: " + gpuName, Reg(10.5f), CText, new RectangleF(sc.X + 20, y, sc.Width - 40, 22));
+                Txt(g, "A temperatura dela aparece no AMD Adrenalin (Alt+R → Desempenho).", Reg(8.8f), CMuted, new RectangleF(sc.X + 20, y + 22, sc.Width - 40, 20));
+            }
         }
 
         // ---------------- Limpeza funda (prévia antes de apagar) ----------------
