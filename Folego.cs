@@ -14,9 +14,9 @@ using Microsoft.Win32;
 
 [assembly: System.Reflection.AssemblyTitle("Fôlego")]
 [assembly: System.Reflection.AssemblyProduct("Fôlego")]
-[assembly: System.Reflection.AssemblyVersion("0.2.1.0")]
-[assembly: System.Reflection.AssemblyFileVersion("0.2.1.0")]
-[assembly: System.Reflection.AssemblyInformationalVersion("0.2.1")]
+[assembly: System.Reflection.AssemblyVersion("0.2.2.0")]
+[assembly: System.Reflection.AssemblyFileVersion("0.2.2.0")]
+[assembly: System.Reflection.AssemblyInformationalVersion("0.2.2")]
 
 namespace Folego
 {
@@ -36,6 +36,7 @@ namespace Folego
         [DllImport("kernel32.dll")] public static extern bool CloseHandle(IntPtr h);
         [DllImport("psapi.dll")] public static extern bool EmptyWorkingSet(IntPtr h);
         [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+        [DllImport("user32.dll")] public static extern int GetWindowLong(IntPtr h, int idx);
         [DllImport("user32.dll")] public static extern int GetWindowThreadProcessId(IntPtr h, out int pid);
         [DllImport("dnsapi.dll")] public static extern bool DnsFlushResolverCache();
         [DllImport("shell32.dll", CharSet = CharSet.Unicode)] public static extern int SHEmptyRecycleBin(IntPtr hwnd, string root, int flags);
@@ -442,7 +443,7 @@ namespace Folego
 
     class MainForm : Form
     {
-        const string Versao = "0.2.1";
+        const string Versao = "0.2.2";
         static readonly Color Bg = Color.FromArgb(24, 25, 30), Card = Color.FromArgb(34, 36, 43),
             Fg = Color.FromArgb(235, 236, 240), Muted = Color.FromArgb(150, 154, 166), Accent = Color.FromArgb(88, 101, 242),
             Good = Color.FromArgb(76, 201, 140);
@@ -492,7 +493,11 @@ namespace Folego
             ClientSize = new Size(480, 690);
             Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
 
-            L("⚡ Fôlego", 20, 14, 16f, FontStyle.Bold, Fg, this);
+            PictureBox logo = new PictureBox { Left = 20, Top = 16, Width = 32, Height = 32, SizeMode = PictureBoxSizeMode.Zoom,
+                BackColor = Color.Transparent };
+            try { using (Icon big = new Icon(Icon, 64, 64)) logo.Image = big.ToBitmap(); } catch { }
+            Controls.Add(logo);
+            L("Fôlego", 58, 14, 16f, FontStyle.Bold, Fg, this);
             L("Libera RAM e limpa lixo sem fechar seu jogo.", 22, 50, 9f, FontStyle.Regular, Muted, this);
 
             string[] nomes = { "Otimizar", "Inicialização", "Modo Jogo" };
@@ -722,14 +727,23 @@ namespace Folego
             lv.DrawItem += (s, e) => { e.DrawDefault = true; };
             lv.DrawSubItem += (s, e) => { e.DrawDefault = true; };
             // A última coluna ocupa o resto da largura (senão sobra um pedaço branco no cabeçalho).
-            EventHandler fill = delegate
-            {
-                int w = lv.ClientSize.Width;
-                for (int c = 0; c < lv.Columns.Count - 1; c++) w -= lv.Columns[c].Width;
-                if (lv.Columns.Count > 0 && w > 40) lv.Columns[lv.Columns.Count - 1].Width = w;
-            };
+            EventHandler fill = delegate { FitLast(lv); };
             lv.ClientSizeChanged += fill;
             lv.HandleCreated += fill;
+        }
+
+        // Estica a última coluna até a borda, descontando a barra de rolagem vertical quando ela aparece
+        // (sem isso sobra um pedaço branco no cabeçalho ou surge uma barra de rolagem horizontal).
+        static void FitLast(ListView lv)
+        {
+            if (lv.Columns.Count == 0 || !lv.IsHandleCreated) return;
+            lv.BeginInvoke((MethodInvoker)delegate
+            {
+                bool vs = (Native.GetWindowLong(lv.Handle, -16) & 0x00200000) != 0; // WS_VSCROLL
+                int w = lv.Width - (vs ? SystemInformation.VerticalScrollBarWidth : 0) - 1;
+                for (int c = 0; c < lv.Columns.Count - 1; c++) w -= lv.Columns[c].Width;
+                if (w > 30) lv.Columns[lv.Columns.Count - 1].Width = w;
+            });
         }
 
         void Notify(string msg)
@@ -812,7 +826,7 @@ namespace Folego
                 list.Items.Add(it);
             }
             list.EndUpdate();
-            list.Columns[2].Width = list.ClientSize.Width - list.Columns[0].Width - list.Columns[1].Width;
+            FitLast(list);
         }
 
         void KillSelected()
@@ -854,7 +868,7 @@ namespace Folego
                 startList.Items.Add(it);
             }
             startList.EndUpdate();
-            startList.Columns[2].Width = startList.ClientSize.Width - startList.Columns[0].Width - startList.Columns[1].Width;
+            FitLast(startList);
             UpdateStartupLbl();
         }
 
