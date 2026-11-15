@@ -13,7 +13,9 @@ using System.Windows.Forms;
 
 [assembly: System.Reflection.AssemblyTitle("Otimizador")]
 [assembly: System.Reflection.AssemblyProduct("Otimizador")]
-[assembly: System.Reflection.AssemblyVersion("1.0.0.0")]
+[assembly: System.Reflection.AssemblyVersion("0.1.0.0")]
+[assembly: System.Reflection.AssemblyFileVersion("0.1.0.0")]
+[assembly: System.Reflection.AssemblyInformationalVersion("0.1.0")]
 
 namespace Otimizador
 {
@@ -263,7 +265,7 @@ namespace Otimizador
 
         public MainForm()
         {
-            Text = "Otimizador" + (Engine.IsAdmin() ? " (administrador)" : "");
+            Text = "Otimizador 0.1" + (Engine.IsAdmin() ? " (administrador)" : "");
             Font = new Font("Segoe UI", 9.5f);
             BackColor = Bg; ForeColor = Fg;
             FormBorderStyle = FormBorderStyle.FixedSingle; MaximizeBox = false;
