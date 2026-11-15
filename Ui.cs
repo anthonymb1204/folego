@@ -19,7 +19,7 @@ namespace Folego
 {
     class MainForm : Form
     {
-        const string Versao = "0.4.0";
+        const string Versao = "0.4.1";
         const string Repo = "https://github.com/anthonymb1204/folego";
 
         // ---------------- Cores e fontes ----------------
@@ -88,6 +88,8 @@ namespace Folego
         static readonly int[] Periodos = { 0, 15, 30, 60, 120 };
         static readonly string[] PeriodoNomes = { "Desligado", "15 min", "30 min", "1 hora", "2 horas" };
 
+        DateTime wpStamp, wpSoon = DateTime.MaxValue; // papel de parede: data do arquivo usado no fundo atual
+        bool bgBuilding;
         Timer tick, anim;
         int tickN;
         NotifyIcon tray;
@@ -98,8 +100,18 @@ namespace Folego
 
         [DllImport("dwmapi.dll")] static extern int DwmSetWindowAttribute(IntPtr h, int attr, ref int val, int size);
 
-        public MainForm()
+        // Como o app foi aberto: janela normal, direto no cantinho da barra de tarefas (sem janela e sem
+        // roubar o foco do jogo) ou só para tirar uma "foto" da tela num arquivo (testes; não mexe em nada).
+        public enum Modo { Janela, Bandeja, Foto }
+        readonly Modo modo;
+        bool startHidden, exiting, trayTipShown;
+
+        bool Background { get { return opts["auto"] || opts["jogo"] || periodo > 0; } }
+
+        public MainForm(Modo modo)
         {
+            this.modo = modo;
+            startHidden = modo == Modo.Bandeja;
             Config.Load();
             for (int i = 0; i < OptDefs.GetLength(0); i++) opts[OptDefs[i, 0]] = Config.B(OptDefs[i, 0], OptDefs[i, 1] == "1");
             jogos = Config.L("jogos", "RobloxPlayerBeta");
@@ -120,21 +132,40 @@ namespace Folego
             try { using (Icon big = new Icon(Icon, 64, 64)) appIcon = big.ToBitmap(); } catch { }
 
             tray = new NotifyIcon { Icon = Icon, Text = "Fôlego", Visible = false };
-            tray.DoubleClick += delegate { Show(); WindowState = FormWindowState.Normal; tray.Visible = false; };
-            Resize += delegate
+            tray.DoubleClick += delegate { ShowFromTray(); };
+            ContextMenuStrip tm = new ContextMenuStrip { Renderer = new ToolStripProfessionalRenderer(new DarkMenuColors()),
+                BackColor = Color.FromArgb(30, 27, 48), ForeColor = CText, Font = Reg(10f), ShowImageMargin = false };
+            tm.Items.Add(new ToolStripMenuItem("Abrir o Fôlego", null, delegate { ShowFromTray(); }) { ForeColor = CText, Font = Semi(10f) });
+            tm.Items.Add(new ToolStripMenuItem("Dar fôlego agora", null, delegate { RunOptimize(null); }) { ForeColor = CText });
+            tm.Items.Add(new ToolStripSeparator());
+            tm.Items.Add(new ToolStripMenuItem("Sair", null, delegate { exiting = true; Close(); }) { ForeColor = CText });
+            tray.ContextMenuStrip = tm;
+            // Minimizar ou fechar no X com algo automático ligado: continua no cantinho da barra de tarefas.
+            Resize += delegate { if (WindowState == FormWindowState.Minimized && Background) HideToTray(); };
+            FormClosing += (s, ev) =>
             {
-                if (WindowState == FormWindowState.Minimized && (opts["auto"] || opts["jogo"]))
+                if (!exiting && ev.CloseReason == CloseReason.UserClosing && Background && modo != Modo.Foto)
                 {
-                    Hide(); tray.Visible = true;
-                    tray.ShowBalloonTip(2000, "Fôlego", "Continua cuidando do PC aqui embaixo.", ToolTipIcon.Info);
+                    ev.Cancel = true;
+                    HideToTray();
                 }
             };
+            // O Windows avisa quando o papel de parede muda; o fundo acompanha (confere de novo 1 s depois,
+            // quando o arquivo novo já foi gravado).
+            Microsoft.Win32.UserPreferenceChangedEventHandler wpHandler = (s, ev) =>
+            {
+                if (ev.Category == Microsoft.Win32.UserPreferenceCategory.Desktop) wpSoon = DateTime.Now.AddSeconds(1);
+            };
+            Microsoft.Win32.SystemEvents.UserPreferenceChanged += wpHandler;
+            FormClosed += delegate { Microsoft.Win32.SystemEvents.UserPreferenceChanged -= wpHandler; };
             FormClosed += delegate { tray.Visible = false; };
 
             LoadActivity();
             Native.GetSystemTimes(out lastIdle, out lastKernel, out lastUser);
             ReadStats();
             ramDisp = ramTarget; cpuDisp = cpuTarget;
+
+            if (modo == Modo.Foto) return; // foto: sem timers, sem Modo Jogo, sem fôlego automático
 
             tick = new Timer { Interval = 1000 };
             tick.Tick += delegate
@@ -143,6 +174,7 @@ namespace Folego
                 tickN++;
                 if (periodo > 0 && !busy && DateTime.Now >= nextRun) RunOptimize("Programado");
                 if (tickN % 2 == 0) CheckGame();
+                if (tickN % 3 == 0 || DateTime.Now >= wpSoon) { wpSoon = DateTime.MaxValue; CheckWallpaper(); }
                 if (tickN % 15 == 0 && page == 0 && Visible) RefreshList();
                 cpuDisp = cpuTarget; // a CPU muda o tempo todo: pula direto, sem animar
                 if (Math.Abs(ramTarget - ramDisp) > 0.01) StartAnim(); else ramDisp = ramTarget;
@@ -152,6 +184,78 @@ namespace Folego
             anim = new Timer { Interval = 33 };
             anim.Tick += delegate { Animate(); };
             Shown += delegate { RefreshList(); LoadStartup(); CheckGame(); };
+
+            // Outra cópia do Fôlego aberta pela pessoa pede para esta aparecer.
+            System.Threading.Thread waiter = new System.Threading.Thread(delegate ()
+            {
+                try
+                {
+                    using (System.Threading.EventWaitHandle ev = new System.Threading.EventWaitHandle(false,
+                               System.Threading.EventResetMode.AutoReset, "Folego_Mostrar"))
+                        while (true)
+                        {
+                            ev.WaitOne();
+                            if (IsHandleCreated) BeginInvoke((MethodInvoker)ShowFromTray);
+                        }
+                }
+                catch { }
+            }) { IsBackground = true };
+            waiter.Start();
+        }
+
+        // Abrindo em segundo plano: cria a janela sem mostrar (não rouba o foco do jogo).
+        protected override void SetVisibleCore(bool value)
+        {
+            if (startHidden)
+            {
+                startHidden = false;
+                if (!IsHandleCreated) CreateHandle();
+                value = false;
+                tray.Visible = true;
+                RefreshList();
+                LoadStartup();
+            }
+            base.SetVisibleCore(value);
+        }
+
+        void HideToTray()
+        {
+            Hide();
+            tray.Visible = true;
+            if (!trayTipShown) // só da primeira vez, e só porque a pessoa minimizou/fechou
+            {
+                trayTipShown = true;
+                tray.ShowBalloonTip(2000, "Fôlego", "Continua cuidando do PC aqui embaixo. Para sair, clique com o botão direito.", ToolTipIcon.Info);
+            }
+        }
+
+        void ShowFromTray()
+        {
+            Show();
+            WindowState = FormWindowState.Normal;
+            Activate();
+            tray.Visible = false;
+            Invalidate();
+        }
+
+        // Foto da tela (testes): desenha a página pedida num arquivo, sem mostrar janela.
+        public void SaveFoto(string arquivo, int pagina)
+        {
+            page = pagina;
+            consumers = Engine.TopConsumers(8).Select(x => new Consumer { Nome = x.Nome, Bytes = x.Bytes }).ToList();
+            foreach (Consumer c in consumers) IconForProcess(c.Nome);
+            foreach (string j in jogos.Concat(fechar)) IconForProcess(j);
+            startItems = Engine.StartupItems();
+            foreach (Engine.StartupItem it in startItems) icons["start:" + it.Nome] = IconFromFile(ExeFromCommand(it.Comando));
+            System.Threading.Thread.Sleep(500);
+            ReadStats();
+            ramDisp = ramTarget; cpuDisp = cpuTarget;
+            using (Bitmap b = new Bitmap(ClientSize.Width, ClientSize.Height))
+            {
+                using (Graphics g = Graphics.FromImage(b))
+                    OnPaint(new PaintEventArgs(g, new Rectangle(Point.Empty, ClientSize)));
+                b.Save(arquivo, ImageFormat.Png);
+            }
         }
 
         protected override void OnHandleCreated(EventArgs e)
@@ -221,11 +325,37 @@ namespace Folego
             using (SolidBrush br = new SolidBrush(c)) g.FillPolygon(br, p.ToArray());
         }
 
+        static string WallFile { get { return Environment.ExpandEnvironmentVariables(@"%APPDATA%\Microsoft\Windows\Themes\TranscodedWallpaper"); } }
+
+        static DateTime WallStamp()
+        {
+            try { return File.Exists(WallFile) ? File.GetLastWriteTimeUtc(WallFile) : DateTime.MinValue; }
+            catch { return DateTime.MinValue; }
+        }
+
+        // Se o papel de parede mudou desde o último fundo, refaz o fundo em segundo plano e troca.
+        async void CheckWallpaper()
+        {
+            if (!opts["fundo_wall"] || bgBuilding || bg == null) return;
+            DateTime s = WallStamp();
+            if (s == wpStamp) return;
+            wpStamp = s;
+            bgBuilding = true;
+            Size sz = ClientSize;
+            Bitmap nb = await Task.Run(() => BuildBackground(sz));
+            Bitmap old = bg;
+            bg = nb;
+            if (old != null) old.Dispose();
+            bgBuilding = false;
+            Engine.Log("Fundo atualizado: papel de parede novo");
+            Invalidate();
+        }
+
         static Image LoadWallpaper()
         {
             try
             {
-                string tw = Environment.ExpandEnvironmentVariables(@"%APPDATA%\Microsoft\Windows\Themes\TranscodedWallpaper");
+                string tw = WallFile;
                 if (!File.Exists(tw)) return null;
                 using (MemoryStream ms = new MemoryStream(File.ReadAllBytes(tw)))
                 using (Image img = Image.FromStream(ms))
@@ -244,12 +374,14 @@ namespace Folego
         // ---------------- Desenho ----------------
         protected override void OnPaint(PaintEventArgs e)
         {
+            try
+            {
             Graphics g = e.Graphics;
             g.SmoothingMode = SmoothingMode.AntiAlias;
             g.TextRenderingHint = TextRenderingHint.AntiAliasGridFit;
             g.InterpolationMode = InterpolationMode.HighQualityBicubic;
             g.PixelOffsetMode = PixelOffsetMode.HighQuality;
-            if (bg == null) bg = BuildBackground(ClientSize);
+            if (bg == null) { wpStamp = WallStamp(); bg = BuildBackground(ClientSize); }
             g.DrawImageUnscaled(bg, 0, 0);
             hits.Clear();
 
@@ -262,6 +394,8 @@ namespace Folego
                 default: DrawHeader(g, "Ajustes", "Do seu jeito"); DrawSettings(g); break;
             }
             DrawTooltip(g);
+            }
+            catch (Exception ex) { Engine.Log("Erro ao desenhar: " + ex.Message); }
         }
 
         static GraphicsPath RR(RectangleF r, float rad)
@@ -834,7 +968,7 @@ namespace Folego
         }
 
         // ---------------- Animação e números ----------------
-        void StartAnim() { if (!anim.Enabled) anim.Start(); }
+        void StartAnim() { if (anim != null && !anim.Enabled) anim.Start(); }
 
         void Animate()
         {
@@ -867,7 +1001,7 @@ namespace Folego
             }
             catch { }
 
-            if (opts["auto"] && !busy && m.dwMemoryLoad >= 85 && (DateTime.Now - lastAuto).TotalMinutes >= 3)
+            if (modo != Modo.Foto && opts["auto"] && !busy && m.dwMemoryLoad >= 85 && (DateTime.Now - lastAuto).TotalMinutes >= 3)
             {
                 lastAuto = DateTime.Now;
                 RunOptimize("Automático");
@@ -880,7 +1014,7 @@ namespace Folego
             opts[k] = !opts[k];
             Config.SetB(k, opts[k]);
             Engine.Log(k + ": " + (opts[k] ? "ligado" : "desligado"));
-            if (k == "fundo_wall") { if (bg != null) bg.Dispose(); bg = null; }
+            if (k == "fundo_wall" && !bgBuilding) { if (bg != null) bg.Dispose(); bg = null; }
             if (k == "jogo" && !opts[k] && currentGame != null) EndGame();
             Invalidate();
         }
@@ -1059,8 +1193,7 @@ namespace Folego
         {
             lastMsg = msg;
             lastMsgColor = CGood;
-            AddActivity(DateTime.Now, msg, true);
-            if (tray.Visible) tray.ShowBalloonTip(2500, "Fôlego", msg, ToolTipIcon.Info);
+            AddActivity(DateTime.Now, msg, true); // sem aviso na tela: nada pode atrapalhar o jogo
             Invalidate();
         }
 
@@ -1108,7 +1241,8 @@ namespace Folego
         {
             try
             {
-                Process.Start(new ProcessStartInfo(Application.ExecutablePath) { Verb = "runas", UseShellExecute = true });
+                Process.Start(new ProcessStartInfo(Application.ExecutablePath, "--reaberto") { Verb = "runas", UseShellExecute = true });
+                exiting = true;
                 Close();
             }
             catch (System.ComponentModel.Win32Exception) { } // a pessoa clicou em "Não" no aviso do Windows

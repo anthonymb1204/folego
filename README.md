@@ -21,6 +21,8 @@ Baixe o `Folego.exe` em [Releases](../../releases/latest) e dê dois cliques: n�
 
 O **modo forte** (escudo no menu) limpa também o cache de memória e o Temp do Windows.
 
+**Sem atrapalhar o jogo:** com algo automático ligado (automático, programado ou Modo Jogo), fechar no X ou minimizar deixa o Fôlego no cantinho da barra de tarefas (botão direito no ícone: Abrir, Dar fôlego agora, Sair). Os fôlegos automáticos não mostram avisos nem abrem a janela, e erros vão para o registro. `Folego.exe --bandeja` abre direto no cantinho, sem janela. O fundo acompanha o papel de parede do Windows quando ele muda.
+
 Tudo que o app faz fica em `folego_log.txt`, ao lado do .exe. As preferências ficam em `%APPDATA%\Folego\config.txt`.
 
 ## Código

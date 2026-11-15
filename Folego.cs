@@ -14,9 +14,9 @@ using Microsoft.Win32;
 
 [assembly: System.Reflection.AssemblyTitle("Fôlego")]
 [assembly: System.Reflection.AssemblyProduct("Fôlego")]
-[assembly: System.Reflection.AssemblyVersion("0.4.0.0")]
-[assembly: System.Reflection.AssemblyFileVersion("0.4.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersion("0.4.0")]
+[assembly: System.Reflection.AssemblyVersion("0.4.1.0")]
+[assembly: System.Reflection.AssemblyFileVersion("0.4.1.0")]
+[assembly: System.Reflection.AssemblyInformationalVersion("0.4.1")]
 
 namespace Folego
 {
@@ -436,12 +436,55 @@ namespace Folego
 
     static class Program
     {
+        // Folego.exe                 abre a janela
+        // Folego.exe --bandeja       abre direto no cantinho da barra de tarefas, sem janela (sem roubar o foco)
+        // Folego.exe --foto x.png N  salva a página N (0 a 3) num arquivo, sem janela e sem mexer em nada (testes)
         [STAThread]
-        static void Main()
+        static void Main(string[] args)
         {
+            Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
+            Application.ThreadException += (s, e) => LogErro(e.Exception);
+            AppDomain.CurrentDomain.UnhandledException += (s, e) => LogErro(e.ExceptionObject as Exception);
+            TaskScheduler.UnobservedTaskException += (s, e) => { LogErro(e.Exception); e.SetObserved(); };
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
-            Application.Run(new MainForm());
+
+            int fi = Array.FindIndex(args, a => a == "--foto");
+            if (fi >= 0 && fi + 1 < args.Length)
+            {
+                int pagina = fi + 2 < args.Length ? int.Parse(args[fi + 2]) : 0;
+                using (MainForm f = new MainForm(MainForm.Modo.Foto))
+                {
+                    f.CreateControl();
+                    f.SaveFoto(args[fi + 1], pagina);
+                }
+                return;
+            }
+
+            bool bandeja = args.Any(a => a == "--bandeja" || a == "--tray");
+            bool reaberto = args.Any(a => a == "--reaberto");
+            bool unico;
+            using (System.Threading.Mutex m = new System.Threading.Mutex(true, "Folego_App_Unico", out unico))
+            {
+                if (!unico && reaberto) // reaberto como admin: espera a cópia antiga fechar
+                {
+                    try { unico = m.WaitOne(10000); } catch (System.Threading.AbandonedMutexException) { unico = true; }
+                }
+                if (!unico)
+                {
+                    // Já está aberto: pede para a cópia aberta aparecer (só se a pessoa abriu a janela).
+                    if (!bandeja)
+                        try { System.Threading.EventWaitHandle.OpenExisting("Folego_Mostrar").Set(); } catch { }
+                    return;
+                }
+                Application.Run(new MainForm(bandeja ? MainForm.Modo.Bandeja : MainForm.Modo.Janela));
+            }
+        }
+
+        // Erros nunca viram janela (atrapalharia o jogo): vão para o registro.
+        static void LogErro(Exception ex)
+        {
+            Engine.Log("Erro: " + (ex == null ? "desconhecido" : ex.ToString().Replace("\r", "").Replace("\n", " | ")));
         }
     }
 }
