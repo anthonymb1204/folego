@@ -19,7 +19,7 @@ namespace Folego
 {
     class MainForm : Form
     {
-        const string Versao = "0.4.1";
+        const string Versao = "0.5.0";
         const string Repo = "https://github.com/anthonymb1204/folego";
 
         // ---------------- Cores e fontes ----------------
@@ -31,7 +31,7 @@ namespace Folego
 
         const string GHome = "", GGame = "", GStart = "", GSettings = "", GShield = "",
             GMem = "", GCpu = "", GDrive = "", GPulse = "", GBroom = "", GPlay = "",
-            GClose = "", GAdd = "", GRefresh = "", GInfo = "", GClock = "\uE823";
+            GClose = "", GAdd = "", GRefresh = "", GInfo = "", GClock = "\uE823", GSpeed = "\uEC4A";
 
         static readonly CultureInfo Pt = new CultureInfo("pt-BR");
         static readonly string IconFamily = HasFont("Segoe Fluent Icons") ? "Segoe Fluent Icons" : "Segoe MDL2 Assets";
@@ -391,6 +391,7 @@ namespace Folego
                 case 0: DrawHeader(g, null, null); DrawHome(g); break;
                 case 1: DrawHeader(g, "Inicialização", "Programas que abrem junto com o Windows"); DrawStartup(g); break;
                 case 2: DrawHeader(g, "Modo Jogo", "O PC se prepara sozinho quando o jogo abre"); DrawGame(g); break;
+                case 3: DrawHeader(g, "Mais FPS", "Windows e placa de vídeo afinados pro jogo"); DrawFps(g); break;
                 default: DrawHeader(g, "Ajustes", "Do seu jeito"); DrawSettings(g); break;
             }
             DrawTooltip(g);
@@ -494,8 +495,8 @@ namespace Folego
             Stroke(g, sb, 24, CBorder);
             if (appIcon != null) g.DrawImage(appIcon, sb.X + 16, sb.Y + 18, 36, 36);
 
-            string[] gl = { GHome, GStart, GGame, GSettings };
-            string[] nm = { "Início", "Inicialização", "Modo Jogo", "Ajustes" };
+            string[] gl = { GHome, GStart, GGame, GSpeed, GSettings };
+            string[] nm = { "Início", "Inicialização", "Modo Jogo", "Mais FPS", "Ajustes" };
             for (int i = 0; i < gl.Length; i++)
             {
                 int idx = i;
@@ -893,6 +894,180 @@ namespace Folego
                 }
             }
             y += 54;
+        }
+
+        // ---------------- Mais FPS ----------------
+        // Ajustes do Windows que ajudam o jogo (no registro do usuário; dá para desligar de novo aqui).
+        class RegOpt { public string Title, Desc; public Func<bool> Get; public Action<bool> Set; }
+        List<RegOpt> winOpts;
+        string gpuName, gpuDriver, frameGenKey, adrenalin;
+        bool gpuAmd, gpuNvidia;
+
+        static int RegInt(string key, string name, int def)
+        {
+            try { using (Microsoft.Win32.RegistryKey k = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(key)) { object v = k == null ? null : k.GetValue(name); return v is int ? (int)v : def; } }
+            catch { return def; }
+        }
+        static string RegStr(string key, string name)
+        {
+            try { using (Microsoft.Win32.RegistryKey k = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(key)) return k == null ? null : k.GetValue(name) as string; }
+            catch { return null; }
+        }
+        static void RegSetInt(string key, string name, int v)
+        {
+            using (Microsoft.Win32.RegistryKey k = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(key))
+                k.SetValue(name, v, Microsoft.Win32.RegistryValueKind.DWord);
+        }
+
+        const string KDx = @"Software\Microsoft\DirectX\UserGpuPreferences", KDvr = @"Software\Microsoft\Windows\CurrentVersion\GameDVR";
+
+        void BuildFps()
+        {
+            winOpts = new List<RegOpt> {
+                new RegOpt { Title = "Modo de Jogo do Windows", Desc = "O Windows foca no jogo enquanto ele está aberto",
+                    Get = () => RegInt(@"Software\Microsoft\GameBar", "AutoGameModeEnabled", 1) == 1,
+                    Set = v => RegSetInt(@"Software\Microsoft\GameBar", "AutoGameModeEnabled", v ? 1 : 0) },
+                new RegOpt { Title = "Sem gravação do Xbox em segundo plano", Desc = "A Xbox Game Bar para de gravar o jogo escondida",
+                    Get = () => RegInt(KDvr, "AppCaptureEnabled", 1) == 0 && RegInt(@"System\GameConfigStore", "GameDVR_Enabled", 1) == 0,
+                    Set = v => { RegSetInt(KDvr, "AppCaptureEnabled", v ? 0 : 1); RegSetInt(@"System\GameConfigStore", "GameDVR_Enabled", v ? 0 : 1); } },
+                new RegOpt { Title = "Otimizações para jogos em janela", Desc = "Menos atraso em jogos em janela sem borda, como o Roblox",
+                    Get = () => (RegStr(KDx, "DirectXUserGlobalSettings") ?? "").Contains("SwapEffectUpgradeEnable=1"),
+                    Set = v =>
+                    {
+                        string s = Regex.Replace(RegStr(KDx, "DirectXUserGlobalSettings") ?? "", @"SwapEffectUpgradeEnable=\d;?", "");
+                        if (v) s += "SwapEffectUpgradeEnable=1;";
+                        using (Microsoft.Win32.RegistryKey k = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(KDx))
+                        {
+                            if (s == "") k.DeleteValue("DirectXUserGlobalSettings", false);
+                            else k.SetValue("DirectXUserGlobalSettings", s, Microsoft.Win32.RegistryValueKind.String);
+                        }
+                    } },
+            };
+
+            // Placa de vídeo: nome e driver direto do registro do driver.
+            try
+            {
+                using (Microsoft.Win32.RegistryKey cls = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(
+                           @"SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}"))
+                    foreach (string sub in cls.GetSubKeyNames())
+                    {
+                        if (!Regex.IsMatch(sub, @"^\d{4}$")) continue;
+                        try
+                        {
+                            using (Microsoft.Win32.RegistryKey k = cls.OpenSubKey(sub))
+                            {
+                                string n = k.GetValue("DriverDesc") as string;
+                                if (n == null || n.Contains("Basic") || n.Contains("Virtual") || n.Contains("Parsec")) continue;
+                                gpuName = n; gpuDriver = k.GetValue("DriverVersion") as string;
+                                if (Regex.IsMatch(n, "AMD|Radeon|NVIDIA|GeForce", RegexOptions.IgnoreCase)) break;
+                            }
+                        }
+                        catch { }
+                    }
+            }
+            catch { }
+            gpuAmd = gpuName != null && Regex.IsMatch(gpuName, "AMD|Radeon", RegexOptions.IgnoreCase);
+            gpuNvidia = gpuName != null && Regex.IsMatch(gpuName, "NVIDIA|GeForce", RegexOptions.IgnoreCase);
+            try
+            {
+                using (Microsoft.Win32.RegistryKey k = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(@"SOFTWARE\AMD\DVR"))
+                    frameGenKey = k == null ? null : (k.GetValue("ToggleFrameGen") as string);
+                if (frameGenKey != null) frameGenKey = frameGenKey.Replace(",", "+");
+                using (Microsoft.Win32.RegistryKey k = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(@"SOFTWARE\AMD\CN"))
+                {
+                    string dir = k == null ? null : k.GetValue("InstallDir") as string;
+                    if (dir != null && File.Exists(Path.Combine(dir, "RadeonSoftware.exe"))) adrenalin = Path.Combine(dir, "RadeonSoftware.exe");
+                }
+            }
+            catch { }
+        }
+
+        void DrawFps(Graphics g)
+        {
+            if (winOpts == null) BuildFps();
+            float x0 = 116, W = ClientSize.Width - 24 - x0, half = (W - 16) / 2, top = 150, H1 = 262;
+            RectangleF l1 = new RectangleF(x0, top, half, H1), r1 = new RectangleF(l1.Right + 16, top, half, H1);
+            float top2 = l1.Bottom + 16;
+            RectangleF b = new RectangleF(x0, top2, W, ClientSize.Height - 20 - top2);
+
+            Card(g, l1, "Windows pro jogo", GGame);
+            float y = l1.Y + 52;
+            foreach (RegOpt o in winOpts)
+            {
+                RegOpt opt = o;
+                RectangleF row = new RectangleF(l1.X + 10, y, l1.Width - 20, 48);
+                bool on = opt.Get();
+                bool h = AddHit(row, "reg" + opt.Title, delegate
+                {
+                    try
+                    {
+                        bool now = !opt.Get();
+                        opt.Set(now);
+                        AddActivity(DateTime.Now, "Mais FPS: " + opt.Title + (now ? " ligado" : " desligado"), true);
+                    }
+                    catch (Exception ex) { Engine.Log("Erro ao mudar " + opt.Title + ": " + ex.Message); }
+                    Invalidate();
+                }, null);
+                if (h) Fill(g, row, 12, Color.FromArgb(18, 255, 255, 255));
+                Txt(g, opt.Title, Reg(10.5f), CText, new RectangleF(row.X + 10, y + 3, row.Width - 90, 22));
+                Txt(g, opt.Desc, Reg(8.8f), CMuted, new RectangleF(row.X + 10, y + 25, row.Width - 90, 20));
+                Toggle(g, new RectangleF(row.Right - 58, y + 12, 46, 24), on, h);
+                y += 50;
+            }
+            Txt(g, "Valem a partir da próxima vez que o jogo abrir.", Reg(8.8f), CFaint, new RectangleF(l1.X + 20, l1.Bottom - 34, l1.Width - 40, 20));
+
+            Card(g, r1, "Placa de vídeo", GPulse);
+            Txt(g, gpuName ?? "Não encontrada", Semi(15f), CText, new RectangleF(r1.X + 20, r1.Y + 54, r1.Width - 40, 30));
+            Txt(g, gpuDriver != null ? "Driver " + gpuDriver : "", Reg(9.5f), CMuted, new RectangleF(r1.X + 20, r1.Y + 84, r1.Width - 40, 20));
+            float fy = r1.Y + 116;
+            if (gpuAmd)
+            {
+                Txt(g, "Geração de quadros (AFMF): liga e desliga dentro do jogo com", Reg(9.8f), CText, new RectangleF(r1.X + 20, fy, r1.Width - 40, 22));
+                float kx = r1.X + 20;
+                foreach (string key in (frameGenKey ?? "Alt+Shift+G").Split('+'))
+                {
+                    float kw = Measure(g, key, Semi(9.5f)) + 20;
+                    RectangleF kr = new RectangleF(kx, fy + 26, kw, 26);
+                    Fill(g, kr, 7, Color.FromArgb(34, 255, 255, 255));
+                    Stroke(g, kr, 7, Color.FromArgb(80, 255, 255, 255));
+                    Txt(g, key, Semi(9.5f), CText, kr, StringAlignment.Center, StringAlignment.Center);
+                    kx += kw + 6;
+                }
+                Txt(g, "Upscaling (RSR) e Anti-Lag: no AMD Adrenalin (passo a passo abaixo).", Reg(9.8f), CMuted, new RectangleF(r1.X + 20, fy + 62, r1.Width - 40, 22));
+            }
+            else
+                Txt(g, gpuNvidia ? "Procure no painel da NVIDIA por DLSS, Frame Generation e NVIDIA Image Scaling."
+                                 : "Procure no painel da sua placa por geração de quadros e upscaling.",
+                    Reg(9.8f), CMuted, new RectangleF(r1.X + 20, fy, r1.Width - 40, 44), StringAlignment.Near, StringAlignment.Near, true);
+            if (adrenalin != null)
+            {
+                RectangleF ab = new RectangleF(r1.X + 20, r1.Bottom - 54, 200, 36);
+                bool ha = AddHit(ab, "adrenalin", delegate { try { Process.Start(adrenalin); } catch { } }, "Abre o painel da AMD");
+                FillGrad(g, ab, 18, ha ? CLilac : CPurple, CBlue);
+                Txt(g, "Abrir o AMD Adrenalin", Semi(10f), Color.White, ab, StringAlignment.Center, StringAlignment.Center);
+            }
+
+            Card(g, b, gpuAmd ? "Como ligar no AMD Adrenalin" : "Dicas", GInfo);
+            string[] passos = gpuAmd
+                ? new[] {
+                    "Abra o AMD Adrenalin (botão acima) ou aperte Alt+R.",
+                    "Vá em Jogos → Gráficos (vale para todos os jogos) ou escolha o Roblox na lista.",
+                    "Ligue \"AMD Fluid Motion Frames\": a placa gera quadros no meio e o FPS quase dobra.",
+                    "Ligue \"Radeon Anti-Lag\" junto, para os comandos não atrasarem com o AFMF.",
+                    "Opcional: \"Radeon Super Resolution\" deixa jogar numa resolução menor, esticada com nitidez." }
+                : new[] {
+                    "Deixe o driver da placa de vídeo sempre atualizado.",
+                    "No jogo, prefira tela cheia ou janela sem borda.",
+                    "Use o Modo Jogo do Fôlego para liberar RAM e dar prioridade ao jogo." };
+            float py = b.Y + 54;
+            for (int i = 0; i < passos.Length; i++)
+            {
+                RectangleF n = new RectangleF(b.X + 20, py + 3, 24, 24);
+                FillGrad(g, n, 12, CPurple, CBlue);
+                Txt(g, (i + 1).ToString(), Semi(9.5f), Color.White, n, StringAlignment.Center, StringAlignment.Center);
+                Txt(g, passos[i], Reg(10f), CText, new RectangleF(b.X + 56, py, b.Width - 76, 30), StringAlignment.Near, StringAlignment.Center);
+                py += 40;
+            }
         }
 
         // ---------------- Ajustes ----------------
