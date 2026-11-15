@@ -20,7 +20,7 @@ namespace Folego
 {
     class MainForm : Form
     {
-        const string Versao = "0.9.0";
+        const string Versao = "0.9.1";
         const string Repo = "https://github.com/anthonymb1204/folego";
 
         // ---------------- Cores e fontes ----------------
@@ -926,6 +926,25 @@ namespace Folego
                 k.SetValue(name, v, Microsoft.Win32.RegistryValueKind.DWord);
         }
 
+        // Políticas oficiais do Edge (as do computador valem mais que as do usuário; sem admin, grava no usuário).
+        const string KEdge = @"SOFTWARE\Policies\Microsoft\Edge";
+        static int EdgePolicy(string name)
+        {
+            foreach (Microsoft.Win32.RegistryKey root in new[] { Microsoft.Win32.Registry.LocalMachine, Microsoft.Win32.Registry.CurrentUser })
+                try { using (Microsoft.Win32.RegistryKey k = root.OpenSubKey(KEdge)) { object v = k == null ? null : k.GetValue(name); if (v is int) return (int)v; } }
+                catch { }
+            return 1;
+        }
+        static void SetEdgePolicy(string name, bool desligar)
+        {
+            Microsoft.Win32.RegistryKey root = Engine.IsAdmin() ? Microsoft.Win32.Registry.LocalMachine : Microsoft.Win32.Registry.CurrentUser;
+            using (Microsoft.Win32.RegistryKey k = root.CreateSubKey(KEdge))
+            {
+                if (desligar) k.SetValue(name, 0, Microsoft.Win32.RegistryValueKind.DWord);
+                else k.DeleteValue(name, false);
+            }
+        }
+
         const string KDx = @"Software\Microsoft\DirectX\UserGpuPreferences", KDvr = @"Software\Microsoft\Windows\CurrentVersion\GameDVR";
 
         void BuildFps()
@@ -937,6 +956,9 @@ namespace Folego
                 new RegOpt { Title = "Sem gravação do Xbox em segundo plano", Desc = "A Xbox Game Bar para de gravar o jogo escondida",
                     Get = () => RegInt(KDvr, "AppCaptureEnabled", 1) == 0 && RegInt(@"System\GameConfigStore", "GameDVR_Enabled", 1) == 0,
                     Set = v => { RegSetInt(KDvr, "AppCaptureEnabled", v ? 0 : 1); RegSetInt(@"System\GameConfigStore", "GameDVR_Enabled", v ? 0 : 1); } },
+                new RegOpt { Title = "Edge sem rodar escondido", Desc = "O navegador Edge para de ficar aberto em segundo plano",
+                    Get = () => EdgePolicy("StartupBoostEnabled") == 0 && EdgePolicy("BackgroundModeEnabled") == 0,
+                    Set = v => { SetEdgePolicy("StartupBoostEnabled", v); SetEdgePolicy("BackgroundModeEnabled", v); if (v) Engine.KillEdgeBackground(); } },
                 new RegOpt { Title = "Otimizações para jogos em janela", Desc = "Menos atraso em jogos em janela sem borda, como o Roblox",
                     Get = () => (RegStr(KDx, "DirectXUserGlobalSettings") ?? "").Contains("SwapEffectUpgradeEnable=1"),
                     Set = v =>
@@ -1092,16 +1114,15 @@ namespace Folego
                 Toggle(g, new RectangleF(row.Right - 58, y + 12, 46, 24), on, h);
                 y += 50;
             }
-            Txt(g, "Valem a partir da próxima vez que o jogo abrir.", Reg(8.8f), CFaint, new RectangleF(l1.X + 20, l1.Bottom - 34, l1.Width - 40, 20));
 
             Card(g, r1, "Placa de vídeo", GPulse);
             Txt(g, gpuName ?? "Não encontrada", Semi(15f), CText, new RectangleF(r1.X + 20, r1.Y + 54, r1.Width - 40, 30));
             if (gpuAmd && amdInstalada != null)
             {
                 string nv = DriverNovo();
-                string pre = "AMD Software " + amdInstalada + "  ·  ";
-                float pw = Measure(g, pre, Reg(9.5f));
-                Txt(g, pre, Reg(9.5f), CMuted, new RectangleF(r1.X + 20, r1.Y + 84, pw + 4, 20));
+                string pre = "AMD Software " + amdInstalada + "  ·";
+                float pw = Measure(g, pre, Reg(9.5f)) + 14; // a medida ignora espaços no fim: folga para não cortar
+                Txt(g, pre, Reg(9.5f), CMuted, new RectangleF(r1.X + 20, r1.Y + 84, pw + 10, 20));
                 Txt(g, nv != null ? "versão nova: " + nv : amdRecomendada != null ? "em dia" : "conferindo...", Reg(9.5f),
                     nv != null ? COrange : amdRecomendada != null ? CGood : CMuted, new RectangleF(r1.X + 20 + pw, r1.Y + 84, r1.Width - 40 - pw, 20));
             }

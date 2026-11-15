@@ -14,9 +14,9 @@ using Microsoft.Win32;
 
 [assembly: System.Reflection.AssemblyTitle("Fôlego")]
 [assembly: System.Reflection.AssemblyProduct("Fôlego")]
-[assembly: System.Reflection.AssemblyVersion("0.9.0.0")]
-[assembly: System.Reflection.AssemblyFileVersion("0.9.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersion("0.9.0")]
+[assembly: System.Reflection.AssemblyVersion("0.9.1.0")]
+[assembly: System.Reflection.AssemblyFileVersion("0.9.1.0")]
+[assembly: System.Reflection.AssemblyInformationalVersion("0.9.1")]
 
 namespace Folego
 {
@@ -282,6 +282,18 @@ namespace Folego
                 finally { p.Dispose(); }
             }
             return nomes.OrderBy(s => s, StringComparer.OrdinalIgnoreCase).ToList();
+        }
+
+        // Fecha o Edge que está rodando escondido; se tiver alguma janela do Edge aberta, não mexe (perderia as abas).
+        public static void KillEdgeBackground()
+        {
+            Process[] ps = Process.GetProcessesByName("msedge");
+            try
+            {
+                if (ps.Any(p => { try { return p.MainWindowHandle != IntPtr.Zero; } catch { return true; } })) return;
+                foreach (Process p in ps) try { p.Kill(); } catch { }
+            }
+            finally { foreach (Process p in ps) p.Dispose(); }
         }
 
         // O jogo só conta como aberto se tiver janela visível: o Roblox, por exemplo, fica rodando escondido
