@@ -20,7 +20,7 @@ namespace Folego
 {
     class MainForm : Form
     {
-        const string Versao = "0.8.0";
+        const string Versao = "0.9.0";
         const string Repo = "https://github.com/anthonymb1204/folego";
 
         // ---------------- Cores e fontes ----------------
@@ -170,6 +170,7 @@ namespace Folego
             ReadStats();
             ramDisp = ramTarget; cpuDisp = cpuTarget;
 
+            LerInicio();
             BuildFps(); // placa de vídeo (e, fora do modo foto, confere driver novo da AMD)
             if (modo == Modo.Foto) return; // foto: sem timers, sem Modo Jogo, sem fôlego automático
 
@@ -1270,6 +1271,16 @@ namespace Folego
             Card(g, r, "Aparência e sistema", GSettings);
             y = r.Y + 52;
             OptionRow(g, r, ref y, "fundo_wall", "Papel de parede no fundo", "O do Windows, desfocado; desligado fica roxo");
+            {
+                RectangleF row = new RectangleF(r.X + 10, y, r.Width - 20, 48);
+                bool hi = AddHit(row, "inicio", delegate { SetInicio(!inicioAtivo); }, null);
+                if (hi) Fill(g, row, 12, Color.FromArgb(18, 255, 255, 255));
+                Txt(g, "Abrir com o Windows", Reg(10.5f), CText, new RectangleF(row.X + 10, y + 3, row.Width - 90, 22));
+                Txt(g, inicioMsg ?? "Abre escondido no cantinho, já no modo forte",
+                    Reg(8.8f), inicioMsg != null ? COrange : CMuted, new RectangleF(row.X + 10, y + 25, row.Width - 90, 20));
+                Toggle(g, new RectangleF(row.Right - 58, y + 12, 46, 24), inicioAtivo, hi);
+                y += 50;
+            }
             bool admin = Engine.IsAdmin();
             ActionRow(g, r, ref y, "sadmin", "Modo forte", admin ? "Limpa também o cache de memória e o Temp do Windows" : "Limpa mais, mas pede permissão de administrador",
                 admin ? "Ligado" : "Ligar", admin ? null : (Action)RelaunchAdmin);
@@ -1308,6 +1319,60 @@ namespace Folego
             else
                 Txt(g, celMsg ?? "Controle o Fôlego pelo celular, no Wi-Fi de casa (fora de casa, pelo Tailscale). Pede o modo forte, para liberar no firewall só em redes privadas.",
                     Reg(9.5f), celMsg != null ? COrange : CMuted, new RectangleF(sc.X + 20, sc.Y + 52, sc.Width - 40, 90), StringAlignment.Near, StringAlignment.Near, true);
+        }
+
+        // ---------------- Abrir com o Windows ----------------
+        // Com admin: tarefa agendada no logon com privilégio alto (abre no modo forte sem pedir permissão).
+        // Sem admin: entrada "Run" do usuário (abre sem modo forte).
+        const string Tarefa = "Folego";
+        const string RunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
+        bool inicioAtivo;
+        string inicioMsg;
+
+        static int Oculto(string exe, string args)
+        {
+            try
+            {
+                using (Process p = Process.Start(new ProcessStartInfo(exe, args) { CreateNoWindow = true, UseShellExecute = false,
+                           WindowStyle = ProcessWindowStyle.Hidden, RedirectStandardOutput = true, RedirectStandardError = true }))
+                {
+                    p.StandardOutput.ReadToEnd();
+                    p.WaitForExit(15000);
+                    return p.ExitCode;
+                }
+            }
+            catch { return -1; }
+        }
+
+        void LerInicio()
+        {
+            bool run = RegStr(RunKey, "Folego") != null;
+            inicioAtivo = run || Oculto("schtasks.exe", "/query /tn \"" + Tarefa + "\"") == 0;
+        }
+
+        void SetInicio(bool on)
+        {
+            inicioMsg = null;
+            string exe = Application.ExecutablePath;
+            try
+            {
+                using (Microsoft.Win32.RegistryKey k = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(RunKey)) k.DeleteValue("Folego", false);
+                if (Engine.IsAdmin()) Oculto("schtasks.exe", "/delete /f /tn \"" + Tarefa + "\"");
+                if (on)
+                {
+                    bool ok = Engine.IsAdmin() && Oculto("schtasks.exe", "/create /f /tn \"" + Tarefa + "\" /sc onlogon /rl highest /tr \"\\\"" + exe + "\\\" --bandeja\"") == 0;
+                    if (!ok)
+                    {
+                        using (Microsoft.Win32.RegistryKey k = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(RunKey))
+                            k.SetValue("Folego", "\"" + exe + "\" --bandeja");
+                        if (!Engine.IsAdmin()) inicioMsg = "Vai abrir sem o modo forte (ligue o modo forte e ative de novo)";
+                    }
+                }
+                AddActivity(DateTime.Now, on ? "Abrir com o Windows: ligado" : "Abrir com o Windows: desligado", true);
+            }
+            catch (Exception ex) { Engine.Log("Abrir com o Windows: " + ex.Message); }
+            LerInicio();
+            Invalidate();
         }
 
         // ---------------- Celular ----------------
