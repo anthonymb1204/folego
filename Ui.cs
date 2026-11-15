@@ -19,7 +19,7 @@ namespace Folego
 {
     class MainForm : Form
     {
-        const string Versao = "0.5.0";
+        const string Versao = "0.6.0";
         const string Repo = "https://github.com/anthonymb1204/folego";
 
         // ---------------- Cores e fontes ----------------
@@ -96,7 +96,7 @@ namespace Folego
 
         static readonly string[,] OptDefs = {
             { "temp", "1" }, { "dns", "1" }, { "lixeira", "0" }, { "auto", "0" }, { "jogo", "1" },
-            { "jogo_ram", "1" }, { "jogo_prio", "1" }, { "jogo_reabrir", "1" }, { "fundo_wall", "1" } };
+            { "jogo_ram", "1" }, { "jogo_prio", "1" }, { "jogo_reabrir", "1" }, { "fundo_wall", "1" }, { "escala_nitido", "1" } };
 
         [DllImport("dwmapi.dll")] static extern int DwmSetWindowAttribute(IntPtr h, int attr, ref int val, int size);
 
@@ -159,6 +159,7 @@ namespace Folego
             Microsoft.Win32.SystemEvents.UserPreferenceChanged += wpHandler;
             FormClosed += delegate { Microsoft.Win32.SystemEvents.UserPreferenceChanged -= wpHandler; };
             FormClosed += delegate { tray.Visible = false; };
+            FormClosed += delegate { Escala.Encerrar(); try { UnregisterHotKey(Handle, HotkeyEscala); } catch { } };
 
             LoadActivity();
             Native.GetSystemTimes(out lastIdle, out lastKernel, out lastUser);
@@ -263,6 +264,8 @@ namespace Folego
             base.OnHandleCreated(e);
             int on = 1;
             try { DwmSetWindowAttribute(Handle, 20, ref on, 4); } catch { } // barra de título escura
+            if (modo != Modo.Foto && !RegisterHotKey(Handle, HotkeyEscala, 0x2 | 0x1 | 0x4000, (int)Keys.F)) // Ctrl+Alt+F
+                Engine.Log("Escala nítida: o atalho Ctrl+Alt+F já é usado por outro programa");
         }
 
         // ---------------- Fundo: papel de parede desfocado (como na TV) ou roxo com montanhas ----------------
@@ -987,8 +990,8 @@ namespace Folego
             if (winOpts == null) BuildFps();
             float x0 = 116, W = ClientSize.Width - 24 - x0, half = (W - 16) / 2, top = 150, H1 = 262;
             RectangleF l1 = new RectangleF(x0, top, half, H1), r1 = new RectangleF(l1.Right + 16, top, half, H1);
-            float top2 = l1.Bottom + 16;
-            RectangleF b = new RectangleF(x0, top2, W, ClientSize.Height - 20 - top2);
+            float top2 = l1.Bottom + 16, H2 = ClientSize.Height - 20 - top2;
+            RectangleF es = new RectangleF(x0, top2, half, H2), b = new RectangleF(l1.Right + 16, top2, half, H2);
 
             Card(g, l1, "Windows pro jogo", GGame);
             float y = l1.Y + 52;
@@ -1047,27 +1050,111 @@ namespace Folego
                 Txt(g, "Abrir o AMD Adrenalin", Semi(10f), Color.White, ab, StringAlignment.Center, StringAlignment.Center);
             }
 
+            // Escala nítida
+            Card(g, es, "Escala nítida", GSpeed);
+            RectangleF badge = new RectangleF(es.X + 170, es.Y + 19, 86, 22);
+            Stroke(g, badge, 11, Color.FromArgb(120, COrange));
+            Txt(g, "experimental", Reg(8.5f), COrange, badge, StringAlignment.Center, StringAlignment.Center);
+            Txt(g, "Jogue numa janela menor (mais leve, mais FPS) e o Fôlego estica para a tela toda. Saiu do jogo, desliga sozinha.",
+                Reg(9.5f), CMuted, new RectangleF(es.X + 20, es.Y + 50, es.Width - 40, 40), StringAlignment.Near, StringAlignment.Near, true);
+            Txt(g, "Liga e desliga com o jogo na frente:", Reg(10f), CText, new RectangleF(es.X + 20, es.Y + 100, 260, 28), StringAlignment.Near, StringAlignment.Center);
+            float kx2 = es.X + 262;
+            foreach (string key in new[] { "Ctrl", "Alt", "F" })
+            {
+                float kw = Measure(g, key, Semi(9.5f)) + 20;
+                RectangleF kr = new RectangleF(kx2, es.Y + 101, kw, 26);
+                Fill(g, kr, 7, Color.FromArgb(34, 255, 255, 255));
+                Stroke(g, kr, 7, Color.FromArgb(80, 255, 255, 255));
+                Txt(g, key, Semi(9.5f), CText, kr, StringAlignment.Center, StringAlignment.Center);
+                kx2 += kw + 6;
+            }
+            float sx = es.X + 20;
+            string[] modos = { "Pixel nítido", "Suave" };
+            for (int i = 0; i < 2; i++)
+            {
+                bool nit = i == 0, on = opts["escala_nitido"] == nit;
+                float w = Measure(g, modos[i], Reg(9.2f)) + 26;
+                RectangleF r = new RectangleF(sx, es.Y + 142, w, 30);
+                bool h = AddHit(r, "esc" + i, delegate { if (opts["escala_nitido"] != nit) ToggleOpt("escala_nitido"); },
+                    nit ? "Multiplica os pixels: imagem bem definida" : "Estica com suavização: imagem mais macia");
+                if (on) FillGrad(g, r, 15, CPurple, CBlue); else Fill(g, r, 15, Color.FromArgb(h ? 40 : 22, 255, 255, 255));
+                if (!on) Stroke(g, r, 15, Color.FromArgb(50, 255, 255, 255));
+                Txt(g, modos[i], Reg(9.2f), on ? Color.White : CText, r, StringAlignment.Center, StringAlignment.Center);
+                sx += w + 6;
+            }
+            string est; Color ec;
+            if (Escala.Ligada) { est = string.Format(Pt, "● Ligada no {0} · {1:0.#}×", Bonito(Escala.Jogo), Escala.Fator); ec = CGood; }
+            else if (escMsg != null) { est = escMsg; ec = COrange; }
+            else { est = "Desligada"; ec = CFaint; }
+            Txt(g, est, Reg(9.5f), ec, new RectangleF(es.X + 20, es.Y + 186, es.Width - 40, 44), StringAlignment.Near, StringAlignment.Near, true);
+
             Card(g, b, gpuAmd ? "Como ligar no AMD Adrenalin" : "Dicas", GInfo);
             string[] passos = gpuAmd
                 ? new[] {
-                    "Abra o AMD Adrenalin (botão acima) ou aperte Alt+R.",
-                    "Vá em Jogos → Gráficos (vale para todos os jogos) ou escolha o Roblox na lista.",
-                    "Ligue \"AMD Fluid Motion Frames\": a placa gera quadros no meio e o FPS quase dobra.",
-                    "Ligue \"Radeon Anti-Lag\" junto, para os comandos não atrasarem com o AFMF.",
-                    "Opcional: \"Radeon Super Resolution\" deixa jogar numa resolução menor, esticada com nitidez." }
+                    "Abra o Adrenalin (botão acima) ou aperte Alt+R",
+                    "Vá em Jogos → Gráficos (ou escolha o Roblox)",
+                    "Ligue AMD Fluid Motion Frames: o FPS quase dobra",
+                    "Ligue Radeon Anti-Lag junto, para não atrasar",
+                    "Opcional: Radeon Super Resolution" }
                 : new[] {
-                    "Deixe o driver da placa de vídeo sempre atualizado.",
-                    "No jogo, prefira tela cheia ou janela sem borda.",
-                    "Use o Modo Jogo do Fôlego para liberar RAM e dar prioridade ao jogo." };
-            float py = b.Y + 54;
+                    "Deixe o driver da placa sempre atualizado",
+                    "No jogo, prefira tela cheia ou janela sem borda",
+                    "Use o Modo Jogo do Fôlego" };
+            float py = b.Y + 52;
             for (int i = 0; i < passos.Length; i++)
             {
-                RectangleF n = new RectangleF(b.X + 20, py + 3, 24, 24);
-                FillGrad(g, n, 12, CPurple, CBlue);
-                Txt(g, (i + 1).ToString(), Semi(9.5f), Color.White, n, StringAlignment.Center, StringAlignment.Center);
-                Txt(g, passos[i], Reg(10f), CText, new RectangleF(b.X + 56, py, b.Width - 76, 30), StringAlignment.Near, StringAlignment.Center);
+                RectangleF n = new RectangleF(b.X + 20, py + 5, 22, 22);
+                FillGrad(g, n, 11, CPurple, CBlue);
+                Txt(g, (i + 1).ToString(), Semi(9f), Color.White, n, StringAlignment.Center, StringAlignment.Center);
+                Txt(g, passos[i], Reg(9.8f), CText, new RectangleF(b.X + 52, py, b.Width - 70, 32), StringAlignment.Near, StringAlignment.Center);
                 py += 40;
             }
+        }
+
+        // ---- Escala nítida: atalho Ctrl+Alt+F (funciona com o Fôlego escondido) ----
+        string escMsg;
+        Timer escTimer;
+        [DllImport("user32.dll")] static extern bool RegisterHotKey(IntPtr h, int id, int mods, int vk);
+        [DllImport("user32.dll")] static extern bool UnregisterHotKey(IntPtr h, int id);
+        const int HotkeyEscala = 0xF01;
+
+        protected override void WndProc(ref Message m)
+        {
+            if (m.Msg == 0x0312 && m.WParam.ToInt32() == HotkeyEscala) ToggleEscala(); // WM_HOTKEY
+            base.WndProc(ref m);
+        }
+
+        void ToggleEscala()
+        {
+            if (Escala.Ligada)
+            {
+                Escala.Desligar();
+                if (escTimer != null) escTimer.Stop();
+                AddActivity(DateTime.Now, "Escala nítida desligada", true);
+            }
+            else
+            {
+                escMsg = Escala.Ligar(opts["escala_nitido"], Handle);
+                if (escMsg == null)
+                {
+                    AddActivity(DateTime.Now, string.Format(Pt, "Escala nítida: {0} esticado {1:0.#}×", Bonito(Escala.Jogo), Escala.Fator), true);
+                    if (escTimer == null)
+                    {
+                        escTimer = new Timer { Interval = 200 };
+                        escTimer.Tick += delegate
+                        {
+                            if (!Escala.PrecisaDesligar()) return;
+                            Escala.Desligar();
+                            escTimer.Stop();
+                            AddActivity(DateTime.Now, "Escala nítida desligada (saiu do jogo)", true);
+                            Invalidate();
+                        };
+                    }
+                    escTimer.Start();
+                }
+                else Engine.Log("Escala nítida: " + escMsg);
+            }
+            Invalidate();
         }
 
         // ---------------- Ajustes ----------------
