@@ -7,7 +7,7 @@ Baixe o `Folego.exe` em [Releases](../../releases/latest) e dê dois cliques: n�
 ## Telas
 
 **Início**
-- **Memória:** anel com quanto da RAM está em uso (fica vermelho acima de 85%).
+- **Memória:** anel com quanto da RAM está em uso (fica vermelho acima de 85%) e gráfico das últimas 2 horas, com a linha dos 85% e um pontinho onde teve fôlego.
 - **Dar fôlego:** o botão principal. Encolhe a RAM dos programas em segundo plano sem fechar nenhum (o Roblox, os jogos do Modo Jogo, o app da frente e o Windows ficam protegidos) e, conforme os botõezinhos embaixo, apaga temporários com mais de 1 dia, limpa o cache de DNS e esvazia a lixeira.
 - **Sistema:** processador, disco C: e quanto o Fôlego já liberou hoje.
 - **Gastando mais RAM:** os programas que mais pesam, com ícone; passe o mouse e clique no × para fechar (pede confirmação). Quem passa de 1,5 GB fica em laranja e ganha uma linha na Atividade (o sininho liga e desliga o aviso).

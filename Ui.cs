@@ -20,7 +20,7 @@ namespace Folego
 {
     class MainForm : Form
     {
-        const string Versao = "0.13.0";
+        const string Versao = "0.14.0";
         const string Repo = "https://github.com/anthonymb1204/folego";
 
         // ---------------- Cores e fontes ----------------
@@ -184,6 +184,7 @@ namespace Folego
                 if (tickN % 2 == 0) CheckGame();
                 if (tickN % 5 == 0) CheckAntiAfk();
                 if (tickN % 30 == 10) CheckPesados();
+                if (tickN % 30 == 1) AmostraRam();
                 if (tickN % 3 == 0 || DateTime.Now >= wpSoon) { wpSoon = DateTime.MaxValue; CheckWallpaper(); }
                 if (tickN % 15 == 0 && page == 0 && Visible) RefreshList();
                 if (tickN % 3600 == 0) ChecarDriverAmd(false);
@@ -263,6 +264,12 @@ namespace Folego
             foreach (Engine.StartupItem it in startItems) icons["start:" + it.Nome] = IconFromFile(ExeFromCommand(it.Comando));
             System.Threading.Thread.Sleep(500);
             ReadStats();
+            if (Environment.GetCommandLineArgs().Contains("--demo")) // só para testar o desenho do histórico
+                for (int i = 0; i < HistMax; i++)
+                {
+                    hist.Add((float)(0.78 + 0.1 * Math.Sin(i / 14.0) - (i % 60 < 3 ? 0.12 : 0)));
+                    histT.Add(DateTime.Now.AddSeconds(-30 * (HistMax - i)));
+                }
             ramDisp = ramTarget; cpuDisp = cpuTarget;
             using (Bitmap b = new Bitmap(ClientSize.Width, ClientSize.Height))
             {
@@ -584,19 +591,21 @@ namespace Folego
 
             // Memória: anel como o do "Focus Timer".
             Card(g, a, "Memória", GMem);
-            float cx = a.X + a.Width / 2, cy = a.Y + 138, R = 72;
+            float cx = a.X + a.Width / 2, cy = a.Y + 112, R = 56;
             RectangleF ring = new RectangleF(cx - R, cy - R, 2 * R, 2 * R);
-            using (Pen track = new Pen(Color.FromArgb(32, 255, 255, 255), 12)) g.DrawEllipse(track, ring);
+            using (Pen track = new Pen(Color.FromArgb(32, 255, 255, 255), 11)) g.DrawEllipse(track, ring);
             float sweep = (float)(360 * Math.Max(0, Math.Min(1, ramDisp)));
             bool alert = ramDisp > 0.85;
             if (sweep > 0.5f)
                 using (LinearGradientBrush br = new LinearGradientBrush(ring, alert ? CBad : CPurple, alert ? COrange : CBlue, 45f))
-                using (Pen p = new Pen(br, 12) { StartCap = LineCap.Round, EndCap = LineCap.Round })
+                using (Pen p = new Pen(br, 11) { StartCap = LineCap.Round, EndCap = LineCap.Round })
                     g.DrawArc(p, ring, -90, sweep);
-            Txt(g, (int)Math.Round(ramDisp * 100) + "%", Light(28f), CText, new RectangleF(cx - 80, cy - 32, 160, 50), StringAlignment.Center, StringAlignment.Center);
-            Txt(g, "em uso", Reg(9.5f), CMuted, new RectangleF(cx - 80, cy + 14, 160, 22), StringAlignment.Center);
-            Txt(g, string.Format(Pt, "{0:0.0} GB livres de {1:0.0} GB", ramFree, ramTotal), Reg(10f), CMuted,
-                new RectangleF(a.X, a.Bottom - 40, a.Width, 24), StringAlignment.Center);
+            Txt(g, (int)Math.Round(ramDisp * 100) + "%", Light(23f), CText, new RectangleF(cx - 70, cy - 26, 140, 40), StringAlignment.Center, StringAlignment.Center);
+            Txt(g, "em uso", Reg(8.8f), CMuted, new RectangleF(cx - 70, cy + 10, 140, 20), StringAlignment.Center);
+            DrawHistorico(g, new RectangleF(a.X + 20, a.Y + 184, a.Width - 40, 40));
+            Txt(g, "últimas 2 h", Reg(8f), CFaint, new RectangleF(a.X + 20, a.Y + 166, a.Width - 40, 16), StringAlignment.Far);
+            Txt(g, string.Format(Pt, "{0:0.0} GB livres de {1:0.0} GB", ramFree, ramTotal), Reg(9.5f), CMuted,
+                new RectangleF(a.X, a.Bottom - 32, a.Width, 22), StringAlignment.Center);
 
             // Dar fôlego: o botão principal.
             Card(g, b, "Dar fôlego", GBroom);
@@ -1436,6 +1445,44 @@ namespace Folego
             else
                 Txt(g, celMsg ?? "Controle o Fôlego pelo celular, no Wi-Fi de casa (fora de casa, pelo Tailscale). Pede o modo forte, para liberar no firewall só em redes privadas.",
                     Reg(9.5f), celMsg != null ? COrange : CMuted, new RectangleF(sc.X + 20, sc.Y + 52, sc.Width - 40, 90), StringAlignment.Near, StringAlignment.Near, true);
+        }
+
+        // ---------------- Histórico de RAM (últimas 2 h, uma amostra a cada 30 s) ----------------
+        readonly List<float> hist = new List<float>();
+        readonly List<DateTime> histT = new List<DateTime>();
+        const int HistMax = 240;
+
+        void AmostraRam()
+        {
+            hist.Add((float)ramTarget); histT.Add(DateTime.Now);
+            if (hist.Count > HistMax) { hist.RemoveAt(0); histT.RemoveAt(0); }
+        }
+
+        void DrawHistorico(Graphics g, RectangleF r)
+        {
+            Fill(g, r, 8, Color.FromArgb(14, 255, 255, 255));
+            if (hist.Count < 2) { Txt(g, "juntando dados...", Reg(8f), CFaint, r, StringAlignment.Center, StringAlignment.Center); return; }
+            float lo = Math.Max(0f, Math.Min(0.5f, hist.Min() - 0.05f)); // escala começa perto do menor valor: mostra a variação
+            float y85 = r.Bottom - 3 - (0.85f - lo) / (1f - lo) * (r.Height - 6);
+            using (Pen p85 = new Pen(Color.FromArgb(80, CBad)) { DashStyle = DashStyle.Dash }) g.DrawLine(p85, r.X + 4, y85, r.Right - 4, y85);
+            DateTime fim = DateTime.Now, ini = fim.AddMinutes(-120);
+            Func<DateTime, float> X = t => r.X + 4 + (float)((t - ini).TotalMinutes / 120.0) * (r.Width - 8);
+            Func<float, float> Y = v => r.Bottom - 3 - Math.Max(0, Math.Min(1, (v - lo) / (1f - lo))) * (r.Height - 6);
+            List<PointF> pts = new List<PointF>();
+            for (int i = 0; i < hist.Count; i++) pts.Add(new PointF(Math.Max(r.X + 4, X(histT[i])), Y(hist[i])));
+            using (GraphicsPath area = new GraphicsPath())
+            {
+                area.AddLines(pts.ToArray());
+                area.AddLine(pts[pts.Count - 1], new PointF(pts[pts.Count - 1].X, r.Bottom - 2));
+                area.AddLine(new PointF(pts[pts.Count - 1].X, r.Bottom - 2), new PointF(pts[0].X, r.Bottom - 2));
+                area.CloseFigure();
+                using (LinearGradientBrush br = new LinearGradientBrush(r, Color.FromArgb(90, CPurple), Color.FromArgb(10, CBlue), 90f)) g.FillPath(br, area);
+            }
+            using (Pen ln = new Pen(CLilac, 1.6f) { LineJoin = LineJoin.Round }) g.DrawLines(ln, pts.ToArray());
+            // Pontinhos onde teve fôlego.
+            using (SolidBrush dot = new SolidBrush(CTeal))
+                foreach (Act a in acts)
+                    if (a.T > ini && a.Text.Contains("iberou")) { float x = X(a.T); g.FillEllipse(dot, x - 3, r.Bottom - 9, 6, 6); }
         }
 
         // ---------------- Aviso de programa pesado ----------------
