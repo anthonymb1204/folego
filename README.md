@@ -17,7 +17,7 @@ Baixe o `Folego.exe` em [Releases](../../releases/latest) e dê dois cliques: n�
 
 **Modo Jogo:** quando um jogo da lista abre (vem com o Roblox), o jogo vai para prioridade alta, a RAM é liberada e os programas escolhidos fecham; quando o jogo fecha, eles voltam.
 
-**Mais FPS:** liga e desliga ajustes do Windows que ajudam o jogo (Modo de Jogo, sem gravação do Xbox em segundo plano, otimizações para jogos em janela), mostra a placa de vídeo e, nas placas AMD, o atalho do AFMF (geração de quadros) e o passo a passo para ligar AFMF, Anti-Lag e RSR no AMD Adrenalin. Tem também a **escala nítida** (experimental): com o jogo numa janela menor, Ctrl+Alt+F estica a janela para a tela toda sem borrar (usa a ampliação do próprio Windows); sair do jogo desliga sozinha.
+**Mais FPS:** liga e desliga ajustes do Windows que ajudam o jogo (Modo de Jogo, sem gravação do Xbox em segundo plano, otimizações para jogos em janela), mostra a placa de vídeo e, nas placas AMD, o atalho do AFMF (geração de quadros) e o passo a passo para ligar AFMF, Anti-Lag e RSR no AMD Adrenalin. Nas placas AMD, o Fôlego confere a cada 12 horas (na página oficial da AMD) se saiu driver novo, mostra "em dia" ou "versão nova" e tem um botão para a página de download oficial da placa. Tem também a **escala nítida** (experimental): com o jogo numa janela menor, Ctrl+Alt+F estica a janela para a tela toda sem borrar (usa a ampliação do próprio Windows); sair do jogo desliga sozinha.
 
 **Ajustes:** o que o Dar fôlego limpa, o automático, o **Fôlego programado** (a cada 15 min, 30 min, 1 hora ou 2 horas), o papel de parede no fundo (o do Windows, desfocado, ou roxo com montanhas), modo forte (admin) e o registro de atividades.
 

@@ -14,9 +14,9 @@ using Microsoft.Win32;
 
 [assembly: System.Reflection.AssemblyTitle("Fôlego")]
 [assembly: System.Reflection.AssemblyProduct("Fôlego")]
-[assembly: System.Reflection.AssemblyVersion("0.7.0.0")]
-[assembly: System.Reflection.AssemblyFileVersion("0.7.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersion("0.7.0")]
+[assembly: System.Reflection.AssemblyVersion("0.8.0.0")]
+[assembly: System.Reflection.AssemblyFileVersion("0.8.0.0")]
+[assembly: System.Reflection.AssemblyInformationalVersion("0.8.0")]
 
 namespace Folego
 {
@@ -284,11 +284,18 @@ namespace Folego
             return nomes.OrderBy(s => s, StringComparer.OrdinalIgnoreCase).ToList();
         }
 
+        // O jogo só conta como aberto se tiver janela visível: o Roblox, por exemplo, fica rodando escondido
+        // no cantinho da barra de tarefas desde que o Windows liga (--launch-to-tray), sem jogo nenhum.
         public static bool IsRunning(string nome)
         {
-            Process[] ps = Process.GetProcessesByName(nome);
-            foreach (Process p in ps) p.Dispose();
-            return ps.Length > 0;
+            bool aberto = false;
+            foreach (Process p in Process.GetProcessesByName(nome))
+            {
+                try { if (p.MainWindowHandle != IntPtr.Zero) aberto = true; }
+                catch { }
+                finally { p.Dispose(); }
+            }
+            return aberto;
         }
 
         public static string PathOf(string nome)

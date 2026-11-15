@@ -10,6 +10,7 @@ using System.Drawing.Text;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Net;
 using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
@@ -19,7 +20,7 @@ namespace Folego
 {
     class MainForm : Form
     {
-        const string Versao = "0.7.0";
+        const string Versao = "0.8.0";
         const string Repo = "https://github.com/anthonymb1204/folego";
 
         // ---------------- Cores e fontes ----------------
@@ -169,6 +170,7 @@ namespace Folego
             ReadStats();
             ramDisp = ramTarget; cpuDisp = cpuTarget;
 
+            BuildFps(); // placa de vídeo (e, fora do modo foto, confere driver novo da AMD)
             if (modo == Modo.Foto) return; // foto: sem timers, sem Modo Jogo, sem fôlego automático
 
             tick = new Timer { Interval = 1000 };
@@ -180,6 +182,7 @@ namespace Folego
                 if (tickN % 2 == 0) CheckGame();
                 if (tickN % 3 == 0 || DateTime.Now >= wpSoon) { wpSoon = DateTime.MaxValue; CheckWallpaper(); }
                 if (tickN % 15 == 0 && page == 0 && Visible) RefreshList();
+                if (tickN % 3600 == 0) ChecarDriverAmd(false);
                 cpuDisp = cpuTarget; // a CPU muda o tempo todo: pula direto, sem animar
                 if (Math.Abs(ramTarget - ramDisp) > 0.01) StartAnim(); else ramDisp = ramTarget;
                 if (Visible && WindowState != FormWindowState.Minimized) Invalidate();
@@ -971,6 +974,7 @@ namespace Folego
             catch { }
             gpuAmd = gpuName != null && Regex.IsMatch(gpuName, "AMD|Radeon", RegexOptions.IgnoreCase);
             gpuNvidia = gpuName != null && Regex.IsMatch(gpuName, "NVIDIA|GeForce", RegexOptions.IgnoreCase);
+            if (gpuAmd) { amdInstalada = AmdInstalada(); if (modo != Modo.Foto) ChecarDriverAmd(false); }
             try
             {
                 using (Microsoft.Win32.RegistryKey k = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(@"SOFTWARE\AMD\DVR"))
@@ -983,6 +987,76 @@ namespace Folego
                 }
             }
             catch { }
+        }
+
+        // ---- Driver da AMD: confere a página oficial da placa (no máximo a cada 12 h) ----
+        string amdInstalada, amdRecomendada, amdOpcional;
+        DateTime amdChecado = DateTime.MinValue;
+
+        string AmdPagina()
+        {
+            Match m = Regex.Match(gpuName ?? "", @"RX\s*(\d)(\d{3})\s*(XTX|XT|GRE)?", RegexOptions.IgnoreCase);
+            if (!m.Success) return "https://www.amd.com/en/support/download/drivers.html";
+            string d = m.Groups[1].Value, modelo = "amd-radeon-rx-" + d + m.Groups[2].Value + (m.Groups[3].Success ? "-" + m.Groups[3].Value.ToLowerInvariant() : "");
+            return "https://www.amd.com/en/support/downloads/drivers.html/graphics/radeon-rx/radeon-rx-" + d + "000-series/" + modelo + ".html";
+        }
+
+        static string AmdInstalada()
+        {
+            foreach (string k in new[] { @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall", @"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall" })
+                try
+                {
+                    using (Microsoft.Win32.RegistryKey u = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(k))
+                        foreach (string s in u.GetSubKeyNames())
+                            using (Microsoft.Win32.RegistryKey e = u.OpenSubKey(s))
+                                if ((e.GetValue("DisplayName") as string) == "AMD Software") return e.GetValue("DisplayVersion") as string;
+                }
+                catch { }
+            return null;
+        }
+
+        // Versão nova em relação à instalada: "26.12.1 (recomendada)", "26.11.1 (opcional)" ou null.
+        string DriverNovo()
+        {
+            Version inst, rec, opc;
+            if (amdInstalada == null || !Version.TryParse(amdInstalada, out inst)) return null;
+            if (amdRecomendada != null && Version.TryParse(amdRecomendada, out rec) && rec > inst) return amdRecomendada + " (recomendada)";
+            if (amdOpcional != null && Version.TryParse(amdOpcional, out opc) && opc > inst) return amdOpcional + " (opcional)";
+            return null;
+        }
+
+        async void ChecarDriverAmd(bool forcar)
+        {
+            if (!gpuAmd || (!forcar && (DateTime.Now - amdChecado).TotalHours < 12)) return;
+            amdChecado = DateTime.Now;
+            string url = AmdPagina();
+            string[] r = await Task.Run(delegate
+            {
+                try
+                {
+                    ServicePointManager.SecurityProtocol |= (SecurityProtocolType)3072; // TLS 1.2
+                    HttpWebRequest req = (HttpWebRequest)WebRequest.Create(url);
+                    req.UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Folego/" + Versao;
+                    req.Timeout = 30000;
+                    req.AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate;
+                    string html;
+                    using (WebResponse resp = req.GetResponse())
+                    using (StreamReader sr = new StreamReader(resp.GetResponseStream())) html = sr.ReadToEnd();
+                    Match rec = Regex.Match(html, @"Adrenalin (\d+\.\d+(?:\.\d+)?) WHQL \(Recommended\)");
+                    Match opc = Regex.Match(html, @"Adrenalin (\d+\.\d+(?:\.\d+)?) \(Optional\)");
+                    return new[] { rec.Success ? rec.Groups[1].Value : null, opc.Success ? opc.Groups[1].Value : null };
+                }
+                catch { return null; }
+            });
+            if (r == null) { Engine.Log("Driver da AMD: não consegui conferir a versão nova"); return; }
+            amdRecomendada = r[0]; amdOpcional = r[1];
+            string nova = DriverNovo();
+            if (nova != null && !Config.L("amd_avisado", "").Contains(nova))
+            {
+                Config.SetL("amd_avisado", new List<string> { nova });
+                AddActivity(DateTime.Now, "Driver novo da AMD: " + nova, true);
+            }
+            Invalidate();
         }
 
         void DrawFps(Graphics g)
@@ -1021,7 +1095,16 @@ namespace Folego
 
             Card(g, r1, "Placa de vídeo", GPulse);
             Txt(g, gpuName ?? "Não encontrada", Semi(15f), CText, new RectangleF(r1.X + 20, r1.Y + 54, r1.Width - 40, 30));
-            Txt(g, gpuDriver != null ? "Driver " + gpuDriver : "", Reg(9.5f), CMuted, new RectangleF(r1.X + 20, r1.Y + 84, r1.Width - 40, 20));
+            if (gpuAmd && amdInstalada != null)
+            {
+                string nv = DriverNovo();
+                string pre = "AMD Software " + amdInstalada + "  ·  ";
+                float pw = Measure(g, pre, Reg(9.5f));
+                Txt(g, pre, Reg(9.5f), CMuted, new RectangleF(r1.X + 20, r1.Y + 84, pw + 4, 20));
+                Txt(g, nv != null ? "versão nova: " + nv : amdRecomendada != null ? "em dia" : "conferindo...", Reg(9.5f),
+                    nv != null ? COrange : amdRecomendada != null ? CGood : CMuted, new RectangleF(r1.X + 20 + pw, r1.Y + 84, r1.Width - 40 - pw, 20));
+            }
+            else Txt(g, gpuDriver != null ? "Driver " + gpuDriver : "", Reg(9.5f), CMuted, new RectangleF(r1.X + 20, r1.Y + 84, r1.Width - 40, 20));
             float fy = r1.Y + 116;
             if (gpuAmd)
             {
@@ -1048,6 +1131,18 @@ namespace Folego
                 bool ha = AddHit(ab, "adrenalin", delegate { try { Process.Start(adrenalin); } catch { } }, "Abre o painel da AMD");
                 FillGrad(g, ab, 18, ha ? CLilac : CPurple, CBlue);
                 Txt(g, "Abrir o AMD Adrenalin", Semi(10f), Color.White, ab, StringAlignment.Center, StringAlignment.Center);
+            }
+            if (gpuAmd)
+            {
+                string nova = DriverNovo();
+                string bt = nova != null ? "Baixar a " + nova.Split(' ')[0] : "Site da AMD";
+                float bw = Measure(g, bt, Semi(10f)) + 36;
+                RectangleF db = new RectangleF(r1.X + 20 + (adrenalin != null ? 208 : 0), r1.Bottom - 54, bw, 36);
+                bool hd = AddHit(db, "amdsite", delegate { OpenUrl(AmdPagina()); }, "Abre a página oficial de drivers da sua placa");
+                if (nova != null) FillGrad(g, db, 18, hd ? Color.FromArgb(255, 180, 110) : COrange, CBad);
+                else Fill(g, db, 18, Color.FromArgb(hd ? 50 : 28, 255, 255, 255));
+                if (nova == null) Stroke(g, db, 18, Color.FromArgb(60, 255, 255, 255));
+                Txt(g, bt, Semi(10f), nova != null ? Color.White : CText, db, StringAlignment.Center, StringAlignment.Center);
             }
 
             // Escala nítida
