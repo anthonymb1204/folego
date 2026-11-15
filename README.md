@@ -21,6 +21,8 @@ Baixe o `Folego.exe` em [Releases](../../releases/latest) e dê dois cliques: n�
 
 **Internet:** no cabeçalho, embaixo da data, o ping atual (verde, amarelo ou laranja) e um aviso de "oscilando" quando a conexão varia muito, para saber se o lag é do PC ou da internet. Aparece também no celular.
 
+**Limpeza:** mostra antes quanto ocupa cada coisa (temporários, cache do Chrome, do Edge, do Discord e da loja do Steam, downloads do Windows Update, relatórios de erro, logs do Roblox) e só apaga o que você deixar marcado. Senhas, histórico, cookies e logins ficam; o cache de shaders da placa de vídeo fica de fora de propósito.
+
 **Ajustes:** o que o Dar fôlego limpa, o automático, o **Fôlego programado** (a cada 15 min, 30 min, 1 hora ou 2 horas), o papel de parede no fundo (o do Windows, desfocado, ou roxo com montanhas), modo forte (admin) e o registro de atividades.
 
 O **modo forte** (escudo no menu) limpa também o cache de memória e o Temp do Windows.
@@ -42,5 +44,6 @@ Tudo que o app faz fica em `folego_log.txt`, ao lado do .exe. As preferências f
 - `Escala.cs`: a escala nítida (ampliação do Windows).
 - `Remoto.cs` e `celular.html`: o servidor e a página do celular (vai dentro do .exe).
 - `Qr.cs`: gerador de QR code próprio (sem bibliotecas).
+- `Limpeza.cs`: a limpeza funda (mede e apaga caches).
 - `icone/`: o ícone, desenhado em código (`build-icone.bat`).
 - Compilar: `build.bat` (usa o C# que já vem no Windows). Publicar uma versão: `./publicar.sh 0.4.0 notas.md`.

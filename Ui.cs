@@ -20,7 +20,7 @@ namespace Folego
 {
     class MainForm : Form
     {
-        const string Versao = "0.16.0";
+        const string Versao = "0.17.0";
         const string Repo = "https://github.com/anthonymb1204/folego";
 
         // ---------------- Cores e fontes ----------------
@@ -265,6 +265,7 @@ namespace Folego
             foreach (Engine.StartupItem it in startItems) icons["start:" + it.Nome] = IconFromFile(ExeFromCommand(it.Comando));
             System.Threading.Thread.Sleep(500);
             for (int i = 0; i < 3; i++) MedirPingSync();
+            if (pagina == 4) { limp = Limpeza.Categorias(); foreach (Categoria c in limp) c.Bytes = Limpeza.Medir(c); }
             ReadStats();
             if (Environment.GetCommandLineArgs().Contains("--demo")) // só para testar o desenho do histórico
                 for (int i = 0; i < HistMax; i++)
@@ -417,6 +418,7 @@ namespace Folego
                 case 1: DrawHeader(g, "Inicialização", "Programas que abrem junto com o Windows"); DrawStartup(g); break;
                 case 2: DrawHeader(g, "Modo Jogo", "O PC se prepara sozinho quando o jogo abre"); DrawGame(g); break;
                 case 3: DrawHeader(g, "Mais FPS", "Windows e placa de vídeo afinados pro jogo"); DrawFps(g); break;
+                case 4: DrawHeader(g, "Limpeza", "Só caches e restos: senhas, histórico e logins ficam"); DrawLimpeza(g); break;
                 default: DrawHeader(g, "Ajustes", "Do seu jeito"); DrawSettings(g); break;
             }
             DrawTooltip(g);
@@ -520,13 +522,13 @@ namespace Folego
             Stroke(g, sb, 24, CBorder);
             if (appIcon != null) g.DrawImage(appIcon, sb.X + 16, sb.Y + 18, 36, 36);
 
-            string[] gl = { GHome, GStart, GGame, GSpeed, GSettings };
-            string[] nm = { "Início", "Inicialização", "Modo Jogo", "Mais FPS", "Ajustes" };
+            string[] gl = { GHome, GStart, GGame, GSpeed, GBroom, GSettings };
+            string[] nm = { "Início", "Inicialização", "Modo Jogo", "Mais FPS", "Limpeza", "Ajustes" };
             for (int i = 0; i < gl.Length; i++)
             {
                 int idx = i;
                 RectangleF r = new RectangleF(sb.X + 10, sb.Y + 88 + i * 60, 48, 48);
-                bool hov = AddHit(r, "nav" + i, delegate { page = idx; startScroll = 0; if (idx == 1) LoadStartup(); Invalidate(); }, nm[i]);
+                bool hov = AddHit(r, "nav" + i, delegate { page = idx; startScroll = 0; if (idx == 1) LoadStartup(); if (idx == 4) MedirLimpeza(); Invalidate(); }, nm[i]);
                 if (page == i) FillGrad(g, r, 15, CPurple, CBlue);
                 else if (hov) Fill(g, r, 15, Color.FromArgb(28, 255, 255, 255));
                 Txt(g, gl[i], Ico(15f), page == i ? Color.White : (hov ? CText : CMuted), r, StringAlignment.Center, StringAlignment.Center);
@@ -1380,6 +1382,75 @@ namespace Folego
                 else Engine.Log("Escala nítida: " + escMsg);
             }
             Invalidate();
+        }
+
+        // ---------------- Limpeza funda (prévia antes de apagar) ----------------
+        List<Categoria> limp;
+        bool medindoLimp, limpando;
+        string limpMsg;
+
+        async void MedirLimpeza()
+        {
+            if (medindoLimp || limpando) return;
+            medindoLimp = true;
+            if (limp == null) limp = Limpeza.Categorias();
+            foreach (Categoria c in limp) c.Bytes = -1;
+            Invalidate();
+            List<Categoria> l = limp;
+            await Task.Run(delegate { foreach (Categoria c in l) c.Bytes = Limpeza.Medir(c); });
+            medindoLimp = false;
+            Invalidate();
+        }
+
+        async void LimparSelecionadas()
+        {
+            if (limp == null || limpando || medindoLimp) return;
+            List<Categoria> sel = limp.Where(c => c.Marcada && c.Bytes > 0 && (!c.Admin || Engine.IsAdmin())).ToList();
+            if (sel.Count == 0) { limpMsg = "Nada marcado para limpar."; Invalidate(); return; }
+            limpando = true; limpMsg = "Limpando..."; Invalidate();
+            long total = await Task.Run(() => sel.Sum(c => Limpeza.Limpar(c)));
+            limpando = false;
+            limpMsg = "Apagou " + FormatMB(total / 1048576.0) + " de caches e restos." +
+                      (sel.Any(c => c.EstaAberto) ? " Parte ficou porque o programa estava aberto." : "");
+            AddActivity(DateTime.Now, "Limpeza funda: apagou " + FormatMB(total / 1048576.0) + " (" + string.Join(", ", sel.Select(c => c.Nome)) + ")", true);
+            MedirLimpeza();
+        }
+
+        void DrawLimpeza(Graphics g)
+        {
+            if (limp == null) MedirLimpeza();
+            RectangleF c = new RectangleF(116, 150, ClientSize.Width - 140, ClientSize.Height - 170);
+            long total = limp == null ? 0 : limp.Where(x => x.Bytes > 0).Sum(x => x.Bytes);
+            long marcado = limp == null ? 0 : limp.Where(x => x.Marcada && x.Bytes > 0 && (!x.Admin || Engine.IsAdmin())).Sum(x => x.Bytes);
+            Card(g, c, medindoLimp ? "Medindo..." : "Dá para liberar " + FormatMB(total / 1048576.0), GBroom);
+            RectangleF rb = new RectangleF(c.Right - 50, c.Y + 12, 34, 34);
+            if (AddHit(rb, "lrefresh", MedirLimpeza, "Medir de novo")) Fill(g, rb, 10, Color.FromArgb(28, 255, 255, 255));
+            Txt(g, GRefresh, Ico(11f), CMuted, rb, StringAlignment.Center, StringAlignment.Center);
+            Txt(g, "Nada é apagado sem você mandar. O cache de shaders da placa de vídeo fica de fora (apagar faz o jogo engasgar).",
+                Reg(9.2f), CMuted, new RectangleF(c.X + 20, c.Y + 46, c.Width - 90, 22));
+            float y = c.Y + 76;
+            if (limp != null)
+                foreach (Categoria cat in limp)
+                {
+                    Categoria it = cat;
+                    bool semAdmin = it.Admin && !Engine.IsAdmin();
+                    RectangleF row = new RectangleF(c.X + 10, y, c.Width - 20, 46);
+                    bool h = AddHit(row, "lim" + it.Id, semAdmin ? null : (Action)delegate { it.Marcada = !it.Marcada; Invalidate(); }, null);
+                    if (h) Fill(g, row, 12, Color.FromArgb(18, 255, 255, 255));
+                    Txt(g, it.Nome, Semi(10.5f), semAdmin ? CFaint : CText, new RectangleF(row.X + 12, y + 3, row.Width - 260, 22));
+                    string desc = semAdmin ? "Precisa do modo forte (o escudo no menu)" : it.EstaAberto ? it.Desc + " · está aberto: feche para limpar tudo" : it.Desc;
+                    Txt(g, desc, Reg(8.6f), it.EstaAberto && !semAdmin ? COrange : CMuted, new RectangleF(row.X + 12, y + 24, row.Width - 260, 20));
+                    Txt(g, it.Bytes < 0 ? "..." : FormatMB(it.Bytes / 1048576.0), Semi(10.5f), it.Bytes > 100L * 1048576 ? CText : CMuted,
+                        new RectangleF(row.Right - 200, y, 120, 46), StringAlignment.Far, StringAlignment.Center);
+                    Toggle(g, new RectangleF(row.Right - 58, y + 11, 46, 24), it.Marcada && !semAdmin, h);
+                    y += 48;
+                }
+            RectangleF go = new RectangleF(c.Right - 20 - 240, c.Bottom - 56, 240, 40);
+            bool hg = AddHit(go, "limpar", LimparSelecionadas, null);
+            FillGrad(g, go, 20, hg ? CLilac : CPurple, CBlue);
+            Txt(g, limpando ? "Limpando..." : "Limpar " + FormatMB(marcado / 1048576.0), Semi(11f), Color.White, go, StringAlignment.Center, StringAlignment.Center);
+            if (limpMsg != null) Txt(g, limpMsg, Reg(9.5f), limpMsg.StartsWith("Apagou") ? CGood : CMuted,
+                new RectangleF(c.X + 20, c.Bottom - 56, c.Width - 300, 40), StringAlignment.Near, StringAlignment.Center, true);
         }
 
         // ---------------- Ajustes ----------------
