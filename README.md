@@ -1,6 +1,8 @@
-# Otimizador
+# Fôlego
 
-App de um botão para o PC com Windows: libera RAM e limpa lixo sem fechar o jogo aberto. Baixe o `Otimizador.exe` em [Releases](../../releases/latest) e dê dois cliques, sem instalar nada.
+"Dá um fôlego pro PC." (Até a 0.2.0 o app se chamava Otimizador.)
+
+App de um botão para o PC com Windows: libera RAM e limpa lixo sem fechar o jogo aberto. Baixe o `Folego.exe` em [Releases](../../releases/latest) e dê dois cliques, sem instalar nada.
 
 **Otimizar**
 - **Otimizar agora:** encolhe a RAM dos programas em segundo plano sem fechar nenhum (o Roblox, os jogos do Modo Jogo, o app da frente e o Windows ficam protegidos). Também limpa temporários com mais de 1 dia, cache de DNS e, se marcado, a lixeira.
@@ -14,6 +16,6 @@ App de um botão para o PC com Windows: libera RAM e limpa lixo sem fechar o jog
 **Modo Jogo** (0.2)
 - Quando um jogo da lista abre (vem com o Roblox), coloca o jogo em prioridade alta, libera RAM e fecha os programas que você escolher. Quando o jogo fecha, reabre esses programas.
 
-Tudo que o app faz fica em `otimizador_log.txt`, ao lado do .exe. As preferências ficam em `%APPDATA%\Otimizador\config.txt`.
+Tudo que o app faz fica em `folego_log.txt`, ao lado do .exe. As preferências ficam em `%APPDATA%\Folego\config.txt`.
 
 Compilar: `build.bat` (usa o C# que já vem no Windows).

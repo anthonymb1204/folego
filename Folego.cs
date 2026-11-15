@@ -1,4 +1,4 @@
-// Otimizador: um botão que libera RAM e limpa lixo do PC sem fechar o jogo aberto.
+// Fôlego: um botão que libera RAM e limpa lixo do PC sem fechar o jogo aberto.
 // Compila com o csc do .NET Framework que já vem no Windows (C# 5): veja build.bat.
 using System;
 using System.Collections.Generic;
@@ -12,13 +12,13 @@ using System.Threading.Tasks;
 using System.Windows.Forms;
 using Microsoft.Win32;
 
-[assembly: System.Reflection.AssemblyTitle("Otimizador")]
-[assembly: System.Reflection.AssemblyProduct("Otimizador")]
-[assembly: System.Reflection.AssemblyVersion("0.2.0.0")]
-[assembly: System.Reflection.AssemblyFileVersion("0.2.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersion("0.2.0")]
+[assembly: System.Reflection.AssemblyTitle("Fôlego")]
+[assembly: System.Reflection.AssemblyProduct("Fôlego")]
+[assembly: System.Reflection.AssemblyVersion("0.2.1.0")]
+[assembly: System.Reflection.AssemblyFileVersion("0.2.1.0")]
+[assembly: System.Reflection.AssemblyInformationalVersion("0.2.1")]
 
-namespace Otimizador
+namespace Folego
 {
     static class Native
     {
@@ -69,17 +69,24 @@ namespace Otimizador
         }
     }
 
-    // Preferências, guardadas em %APPDATA%\Otimizador\config.txt (uma "chave=valor" por linha).
+    // Preferências, guardadas em %APPDATA%\Folego\config.txt (uma "chave=valor" por linha).
     static class Config
     {
         static readonly string FilePath = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Otimizador", "config.txt");
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Folego", "config.txt");
         static readonly Dictionary<string, string> D = new Dictionary<string, string>();
 
         public static void Load()
         {
             try
             {
+                // Veio do tempo em que o app se chamava Otimizador: traz as preferências junto.
+                string antigo = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Otimizador", "config.txt");
+                if (!File.Exists(FilePath) && File.Exists(antigo))
+                {
+                    Directory.CreateDirectory(Path.GetDirectoryName(FilePath));
+                    File.Copy(antigo, FilePath);
+                }
                 if (!File.Exists(FilePath)) return;
                 foreach (string line in File.ReadAllLines(FilePath))
                 {
@@ -126,7 +133,7 @@ namespace Otimizador
             "StartMenuExperienceHost", "ShellExperienceHost", "TextInputHost", "SearchHost", "SearchIndexer",
             "SecurityHealthService", "SecurityHealthSystray", "SgrmBroker", "WUDFHost", "WmiPrvSE",
             "ApplicationFrameHost", "SystemSettings", "LockApp", "Widgets", "WidgetService", "smartscreen",
-            "NisSrv", "atiesrxx", "atieclxx", "amdfendrsr", "RadeonSoftware", "AMDRSServ", "Otimizador"
+            "NisSrv", "atiesrxx", "atieclxx", "amdfendrsr", "RadeonSoftware", "AMDRSServ", "Folego", "Otimizador"
         };
         // Jogos do Modo Jogo: protegidos como o Roblox.
         public static HashSet<string> Jogos = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -316,7 +323,7 @@ namespace Otimizador
             return n;
         }
 
-        // Abre um programa como usuário normal (via Explorer), mesmo com o Otimizador em modo admin.
+        // Abre um programa como usuário normal (via Explorer), mesmo com o Fôlego em modo admin.
         public static bool OpenAsUser(string path)
         {
             try { Process.Start("explorer.exe", "\"" + path + "\""); return true; }
@@ -412,7 +419,7 @@ namespace Otimizador
         {
             try
             {
-                File.AppendAllText(Path.Combine(Path.GetDirectoryName(Application.ExecutablePath), "otimizador_log.txt"),
+                File.AppendAllText(Path.Combine(Path.GetDirectoryName(Application.ExecutablePath), "folego_log.txt"),
                     DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + "  " + linha + Environment.NewLine);
             }
             catch { }
@@ -435,7 +442,7 @@ namespace Otimizador
 
     class MainForm : Form
     {
-        const string Versao = "0.2";
+        const string Versao = "0.2.1";
         static readonly Color Bg = Color.FromArgb(24, 25, 30), Card = Color.FromArgb(34, 36, 43),
             Fg = Color.FromArgb(235, 236, 240), Muted = Color.FromArgb(150, 154, 166), Accent = Color.FromArgb(88, 101, 242),
             Good = Color.FromArgb(76, 201, 140);
@@ -477,7 +484,7 @@ namespace Otimizador
             fechar = Config.L("fechar", "");
             SyncJogos();
 
-            Text = "Otimizador " + Versao + (Engine.IsAdmin() ? " (administrador)" : "");
+            Text = "Fôlego " + Versao + (Engine.IsAdmin() ? " (administrador)" : "");
             Font = new Font("Segoe UI", 9.5f);
             BackColor = Bg; ForeColor = Fg;
             FormBorderStyle = FormBorderStyle.FixedSingle; MaximizeBox = false;
@@ -485,7 +492,7 @@ namespace Otimizador
             ClientSize = new Size(480, 690);
             Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
 
-            L("⚡ Otimizador", 20, 14, 16f, FontStyle.Bold, Fg, this);
+            L("⚡ Fôlego", 20, 14, 16f, FontStyle.Bold, Fg, this);
             L("Libera RAM e limpa lixo sem fechar seu jogo.", 22, 50, 9f, FontStyle.Regular, Muted, this);
 
             string[] nomes = { "Otimizar", "Inicialização", "Modo Jogo" };
@@ -505,14 +512,14 @@ namespace Otimizador
             BuildModoJogo(pages[2]);
             ShowPage(0);
 
-            tray = new NotifyIcon { Icon = Icon, Text = "Otimizador", Visible = false };
+            tray = new NotifyIcon { Icon = Icon, Text = "Fôlego", Visible = false };
             tray.DoubleClick += delegate { Show(); WindowState = FormWindowState.Normal; tray.Visible = false; };
             Resize += delegate
             {
                 if (WindowState == FormWindowState.Minimized && (cAuto.Checked || cGame.Checked))
                 {
                     Hide(); tray.Visible = true;
-                    tray.ShowBalloonTip(2000, "Otimizador", "Continua cuidando do PC aqui embaixo.", ToolTipIcon.Info);
+                    tray.ShowBalloonTip(2000, "Fôlego", "Continua cuidando do PC aqui embaixo.", ToolTipIcon.Info);
                 }
             };
             FormClosed += delegate { tray.Visible = false; };
@@ -619,7 +626,7 @@ namespace Otimizador
             cGame = Chk("Ligar o Modo Jogo", 20, 0, "jogo", true, pg);
             cGame.Font = new Font("Segoe UI", 10.5f, FontStyle.Bold);
             cGame.CheckedChanged += delegate { if (!cGame.Checked && currentGame != null) EndGame(); };
-            Label info = L("Quando um jogo da lista abre, o Otimizador prepara o PC sozinho. Ele precisa estar "
+            Label info = L("Quando um jogo da lista abre, o Fôlego prepara o PC sozinho. Ele precisa estar "
                 + "aberto (pode ficar minimizado, no cantinho da barra de tarefas).", 20, 28, 9f, FontStyle.Regular, Muted, pg);
             info.AutoSize = false; info.Width = 440; info.Height = 38;
 
@@ -730,7 +737,7 @@ namespace Otimizador
             result.Text = msg;
             result.ForeColor = Good;
             Engine.Log(msg);
-            if (tray.Visible) tray.ShowBalloonTip(2500, "Otimizador", msg, ToolTipIcon.Info);
+            if (tray.Visible) tray.ShowBalloonTip(2500, "Fôlego", msg, ToolTipIcon.Info);
         }
 
         // ================= Otimizar =================
@@ -810,9 +817,9 @@ namespace Otimizador
 
         void KillSelected()
         {
-            if (list.SelectedItems.Count == 0) { MessageBox.Show("Escolha um programa na lista primeiro.", "Otimizador"); return; }
+            if (list.SelectedItems.Count == 0) { MessageBox.Show("Escolha um programa na lista primeiro.", "Fôlego"); return; }
             string nome = list.SelectedItems[0].Text;
-            if (MessageBox.Show("Fechar \"" + nome + "\"?\n\nO que não estiver salvo nele será perdido.", "Otimizador",
+            if (MessageBox.Show("Fechar \"" + nome + "\"?\n\nO que não estiver salvo nele será perdido.", "Fôlego",
                     MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes) return;
             int n = Engine.Kill(nome);
             Engine.Log("Fechou " + nome + " (" + n + " processos)");
@@ -867,7 +874,7 @@ namespace Otimizador
 
         void ToggleStartup()
         {
-            if (startList.SelectedItems.Count == 0) { MessageBox.Show("Escolha um programa na lista primeiro.", "Otimizador"); return; }
+            if (startList.SelectedItems.Count == 0) { MessageBox.Show("Escolha um programa na lista primeiro.", "Fôlego"); return; }
             ListViewItem it = startList.SelectedItems[0];
             Engine.StartupItem i = (Engine.StartupItem)it.Tag;
             try
@@ -880,7 +887,7 @@ namespace Otimizador
             catch (Exception)
             {
                 MessageBox.Show("\"" + i.Nome + "\" abre para todos os usuários do PC: para mudar, use o Modo forte (admin) na aba Otimizar.",
-                    "Otimizador", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    "Fôlego", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
         }
 
