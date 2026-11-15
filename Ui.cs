@@ -20,7 +20,7 @@ namespace Folego
 {
     class MainForm : Form
     {
-        const string Versao = "0.12.0";
+        const string Versao = "0.12.1";
         const string Repo = "https://github.com/anthonymb1204/folego";
 
         // ---------------- Cores e fontes ----------------
@@ -1507,7 +1507,9 @@ namespace Folego
                 "del \"" + tmp + "\"\r\n" +
                 "del \"%~f0\"\r\n", System.Text.Encoding.Default);
             AddActivity(DateTime.Now, "Atualizando o Fôlego para a " + versao, true);
-            Process.Start(new ProcessStartInfo("cmd.exe", "/c \"" + cmd + "\"") { CreateNoWindow = true, UseShellExecute = false, WindowStyle = ProcessWindowStyle.Hidden });
+            if (remoto != null) remoto.Parar(); // solta a porta do celular para a versão nova
+            // UseShellExecute: o cmd não herda nada deste processo (com herança, ele segurava a porta do celular).
+            Process.Start(new ProcessStartInfo("cmd.exe", "/c \"" + cmd + "\"") { UseShellExecute = true, WindowStyle = ProcessWindowStyle.Hidden });
             exiting = true;
             Close();
         }
