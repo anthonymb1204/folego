@@ -20,7 +20,7 @@ namespace Folego
 {
     class MainForm : Form
     {
-        const string Versao = "0.12.1";
+        const string Versao = "0.13.0";
         const string Repo = "https://github.com/anthonymb1204/folego";
 
         // ---------------- Cores e fontes ----------------
@@ -32,7 +32,7 @@ namespace Folego
 
         const string GHome = "", GGame = "", GStart = "", GSettings = "", GShield = "",
             GMem = "", GCpu = "", GDrive = "", GPulse = "", GBroom = "", GPlay = "",
-            GClose = "", GAdd = "", GRefresh = "", GInfo = "", GClock = "\uE823", GSpeed = "\uEC4A", GPhone = "\uE8EA";
+            GClose = "", GAdd = "", GRefresh = "", GInfo = "", GClock = "\uE823", GSpeed = "\uEC4A", GPhone = "\uE8EA", GBell = "\uEA8F";
 
         static readonly CultureInfo Pt = new CultureInfo("pt-BR");
         static readonly string IconFamily = HasFont("Segoe Fluent Icons") ? "Segoe Fluent Icons" : "Segoe MDL2 Assets";
@@ -97,7 +97,7 @@ namespace Folego
 
         static readonly string[,] OptDefs = {
             { "temp", "1" }, { "dns", "1" }, { "lixeira", "0" }, { "auto", "0" }, { "jogo", "1" },
-            { "jogo_ram", "1" }, { "jogo_prio", "1" }, { "jogo_reabrir", "1" }, { "fundo_wall", "1" }, { "escala_nitido", "1" }, { "celular", "0" }, { "jogo_acordado", "1" }, { "anti_afk", "0" } };
+            { "jogo_ram", "1" }, { "jogo_prio", "1" }, { "jogo_reabrir", "1" }, { "fundo_wall", "1" }, { "escala_nitido", "1" }, { "celular", "0" }, { "jogo_acordado", "1" }, { "anti_afk", "0" }, { "aviso_pesado", "1" } };
 
         [DllImport("dwmapi.dll")] static extern int DwmSetWindowAttribute(IntPtr h, int attr, ref int val, int size);
 
@@ -183,6 +183,7 @@ namespace Folego
                 if (periodo > 0 && !busy && DateTime.Now >= nextRun) RunOptimize("Programado");
                 if (tickN % 2 == 0) CheckGame();
                 if (tickN % 5 == 0) CheckAntiAfk();
+                if (tickN % 30 == 10) CheckPesados();
                 if (tickN % 3 == 0 || DateTime.Now >= wpSoon) { wpSoon = DateTime.MaxValue; CheckWallpaper(); }
                 if (tickN % 15 == 0 && page == 0 && Visible) RefreshList();
                 if (tickN % 3600 == 0) ChecarDriverAmd(false);
@@ -668,6 +669,11 @@ namespace Folego
             RectangleF rb = new RectangleF(d.Right - 50, d.Y + 12, 34, 34);
             if (AddHit(rb, "refresh", RefreshList, "Atualizar")) Fill(g, rb, 10, Color.FromArgb(28, 255, 255, 255));
             Txt(g, GRefresh, Ico(11f), CMuted, rb, StringAlignment.Center, StringAlignment.Center);
+            RectangleF bell = new RectangleF(rb.X - 40, rb.Y, 34, 34);
+            bool hb = AddHit(bell, "bell", delegate { ToggleOpt("aviso_pesado"); },
+                opts["aviso_pesado"] ? "Avisando quando um programa passa de 1,5 GB (clique para parar)" : "Avisar quando um programa passar de 1,5 GB");
+            if (hb) Fill(g, bell, 10, Color.FromArgb(28, 255, 255, 255));
+            Txt(g, GBell, Ico(11f), opts["aviso_pesado"] ? COrange : CFaint, bell, StringAlignment.Center, StringAlignment.Center);
             long max = consumers.Count > 0 ? Math.Max(1, consumers.Max(x => x.Bytes)) : 1;
             float ry = d.Y + 54;
             if (consumers.Count == 0) Txt(g, "Carregando...", Reg(10f), CMuted, new RectangleF(d.X + 20, ry, 300, 30));
@@ -679,8 +685,9 @@ namespace Folego
                 bool hrow = AddHit(row, "row" + item.Nome, null) || hoverId == "kill" + item.Nome;
                 if (hrow) Fill(g, row, 10, Color.FromArgb(20, 255, 255, 255));
                 DrawAppIcon(g, item.Nome, new RectangleF(row.X + 10, ry + 5, 22, 22));
-                Txt(g, item.Nome, Reg(10f), CText, new RectangleF(row.X + 42, ry, 170, 32), StringAlignment.Near, StringAlignment.Center);
-                Bar(g, new RectangleF(row.X + 222, ry + 13, 120, 6), (double)item.Bytes / max, false);
+                bool pesado = item.Bytes > LimitePesado;
+                Txt(g, item.Nome, Reg(10f), pesado ? COrange : CText, new RectangleF(row.X + 42, ry, 170, 32), StringAlignment.Near, StringAlignment.Center);
+                Bar(g, new RectangleF(row.X + 222, ry + 13, 120, 6), (double)item.Bytes / max, pesado);
                 Txt(g, string.Format(Pt, "{0:N0} MB", item.Bytes / 1048576.0), Reg(9.5f), CMuted,
                     new RectangleF(row.X + 344, ry, 78, 32), StringAlignment.Far, StringAlignment.Center);
                 if (hrow)
@@ -1429,6 +1436,24 @@ namespace Folego
             else
                 Txt(g, celMsg ?? "Controle o Fôlego pelo celular, no Wi-Fi de casa (fora de casa, pelo Tailscale). Pede o modo forte, para liberar no firewall só em redes privadas.",
                     Reg(9.5f), celMsg != null ? COrange : CMuted, new RectangleF(sc.X + 20, sc.Y + 52, sc.Width - 40, 90), StringAlignment.Near, StringAlignment.Near, true);
+        }
+
+        // ---------------- Aviso de programa pesado ----------------
+        // Passou de 1,5 GB: uma linha na Atividade (sem janela). Só avisa de novo depois que ele baixar de 1,2 GB.
+        const long LimitePesado = 1536L * 1048576;
+        readonly HashSet<string> avisados = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        async void CheckPesados()
+        {
+            if (!opts["aviso_pesado"]) return;
+            List<Engine.Consumidor> top = await Task.Run(() => Engine.TopConsumers(8));
+            foreach (Engine.Consumidor c in top)
+            {
+                if (c.Bytes > LimitePesado && avisados.Add(c.Nome))
+                    AddActivity(DateTime.Now, string.Format(Pt, "Pesado: {0} está usando {1:0.0} GB (no Início, × fecha)", Bonito(c.Nome), c.Bytes / 1073741824.0), true);
+                else if (c.Bytes < LimitePesado * 0.8) avisados.Remove(c.Nome);
+            }
+            Invalidate();
         }
 
         // ---------------- Atualização dentro do app (Releases do GitHub) ----------------
