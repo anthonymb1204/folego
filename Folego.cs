@@ -14,9 +14,9 @@ using Microsoft.Win32;
 
 [assembly: System.Reflection.AssemblyTitle("Fôlego")]
 [assembly: System.Reflection.AssemblyProduct("Fôlego")]
-[assembly: System.Reflection.AssemblyVersion("0.9.1.0")]
-[assembly: System.Reflection.AssemblyFileVersion("0.9.1.0")]
-[assembly: System.Reflection.AssemblyInformationalVersion("0.9.1")]
+[assembly: System.Reflection.AssemblyVersion("0.9.2.0")]
+[assembly: System.Reflection.AssemblyFileVersion("0.9.2.0")]
+[assembly: System.Reflection.AssemblyInformationalVersion("0.9.2")]
 
 namespace Folego
 {
@@ -348,8 +348,40 @@ namespace Folego
         // Abre um programa como usuário normal (via Explorer), mesmo com o Fôlego em modo admin.
         public static bool OpenAsUser(string path)
         {
-            try { Process.Start("explorer.exe", "\"" + path + "\""); return true; }
+            try
+            {
+                string app = StoreApp(path);
+                Process.Start("explorer.exe", app != null ? "shell:AppsFolder\\" + app : "\"" + path + "\"");
+                return true;
+            }
             catch { return false; }
+        }
+
+        // Apps da Microsoft Store (pasta WindowsApps, ex.: WhatsApp) não abrem pelo caminho do .exe: precisam do
+        // identificador "Família!App". Pasta: Nome_Versão_Arquitetura__IdDoPublicador; o App vem do AppxManifest.xml.
+        static string StoreApp(string path)
+        {
+            try
+            {
+                int i = path.IndexOf(@"\WindowsApps\", StringComparison.OrdinalIgnoreCase);
+                if (i < 0) return null;
+                string resto = path.Substring(i + 13);
+                string pasta = resto.Substring(0, resto.IndexOf('\\'));
+                string[] partes = pasta.Split('_');
+                if (partes.Length < 5) return null;
+                string familia = partes[0] + "_" + partes[partes.Length - 1];
+                string manifesto = Path.Combine(path.Substring(0, i + 13) + pasta, "AppxManifest.xml");
+                string exe = Path.GetFileName(path);
+                System.Xml.XmlDocument x = new System.Xml.XmlDocument();
+                x.Load(manifesto);
+                foreach (System.Xml.XmlNode n in x.GetElementsByTagName("Application"))
+                {
+                    System.Xml.XmlAttribute id = n.Attributes["Id"], ex = n.Attributes["Executable"];
+                    if (id != null && (ex == null || ex.Value.EndsWith(exe, StringComparison.OrdinalIgnoreCase))) return familia + "!" + id.Value;
+                }
+                return familia + "!App";
+            }
+            catch { return null; }
         }
 
         // ---- Programas que abrem com o Windows -------------------------------------------------------
