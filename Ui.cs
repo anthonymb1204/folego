@@ -20,7 +20,7 @@ namespace Folego
 {
     class MainForm : Form
     {
-        const string Versao = "0.10.0";
+        const string Versao = "0.11.0";
         const string Repo = "https://github.com/anthonymb1204/folego";
 
         // ---------------- Cores e fontes ----------------
@@ -182,6 +182,7 @@ namespace Folego
                 tickN++;
                 if (periodo > 0 && !busy && DateTime.Now >= nextRun) RunOptimize("Programado");
                 if (tickN % 2 == 0) CheckGame();
+                if (tickN % 5 == 0) CheckAntiAfk();
                 if (tickN % 3 == 0 || DateTime.Now >= wpSoon) { wpSoon = DateTime.MaxValue; CheckWallpaper(); }
                 if (tickN % 15 == 0 && page == 0 && Visible) RefreshList();
                 if (tickN % 3600 == 0) ChecarDriverAmd(false);
@@ -815,6 +816,58 @@ namespace Folego
             using (Pen ln = new Pen(Color.FromArgb(26, 255, 255, 255))) g.DrawLine(ln, r2.X + 20, r2.Y + 130, r2.Right - 20, r2.Y + 130);
             float fy = r2.Y + 140;
             OptionRow(g, r2, ref fy, "jogo_acordado", "PC acordado durante o jogo", "Não deixa o Windows dormir no meio do farm");
+            OptionRow(g, r2, ref fy, "anti_afk", "Anti-AFK (por sua conta e risco)", "Aperta espaço no jogo a cada ~15 min quando você está parado");
+            if (opts["anti_afk"])
+                Txt(g, currentGame != null ? "Próximo toque no jogo: " + nextAfk.ToString("HH:mm") + " (se você estiver parado)" : "Entra quando o jogo abrir. É contra as regras do Roblox: a conta pode ser punida.",
+                    Reg(8.8f), COrange, new RectangleF(r2.X + 20, fy + 2, r2.Width - 40, 36), StringAlignment.Near, StringAlignment.Near, true);
+        }
+
+        // ---- Anti-AFK: com o jogo aberto e a pessoa parada, aperta espaço no jogo de vez em quando ----
+        [StructLayout(LayoutKind.Sequential)] struct LASTINPUTINFO { public uint cbSize; public uint dwTime; }
+        [DllImport("user32.dll")] static extern bool GetLastInputInfo(ref LASTINPUTINFO i);
+        [DllImport("user32.dll")] static extern bool SetForegroundWindow(IntPtr h);
+        [DllImport("user32.dll")] static extern void keybd_event(byte vk, byte scan, uint flags, UIntPtr extra);
+        DateTime nextAfk = DateTime.MaxValue;
+        static readonly Random rnd = new Random();
+
+        static double SegundosParado()
+        {
+            LASTINPUTINFO li = new LASTINPUTINFO { cbSize = 8 };
+            if (!GetLastInputInfo(ref li)) return 0;
+            return unchecked((uint)Environment.TickCount - li.dwTime) / 1000.0;
+        }
+
+        static IntPtr JanelaDoJogo(string nome)
+        {
+            foreach (Process p in Process.GetProcessesByName(nome))
+                try { if (p.MainWindowHandle != IntPtr.Zero) return p.MainWindowHandle; } catch { } finally { p.Dispose(); }
+            return IntPtr.Zero;
+        }
+
+        void CheckAntiAfk()
+        {
+            if (!opts["anti_afk"] || currentGame == null || DateTime.Now < nextAfk || SegundosParado() < 60) return;
+            IntPtr jogo = JanelaDoJogo(currentGame);
+            if (jogo == IntPtr.Zero) return;
+            nextAfk = DateTime.Now.AddMinutes(12 + rnd.Next(0, 6));
+            IntPtr antes = Native.GetForegroundWindow();
+            bool trocou = antes != jogo;
+            if (trocou)
+            {
+                keybd_event(0x12, 0x38, 0, UIntPtr.Zero); keybd_event(0x12, 0x38, 2, UIntPtr.Zero); // Alt: o Windows deixa trocar a janela da frente
+                SetForegroundWindow(jogo);
+                System.Threading.Thread.Sleep(250);
+            }
+            if (Native.GetForegroundWindow() == jogo)
+            {
+                keybd_event(0x20, 0x39, 0, UIntPtr.Zero);
+                System.Threading.Thread.Sleep(70);
+                keybd_event(0x20, 0x39, 2, UIntPtr.Zero);
+                AddActivity(DateTime.Now, "Anti-AFK: mexeu no " + Bonito(currentGame), true);
+            }
+            else Engine.Log("Anti-AFK: não consegui trazer o jogo para a frente");
+            if (trocou && antes != IntPtr.Zero) { System.Threading.Thread.Sleep(150); SetForegroundWindow(antes); }
+            Invalidate();
         }
 
         // ---- PC acordado: enquanto o jogo está aberto, o Windows não suspende/dorme por inatividade ----
@@ -1503,7 +1556,7 @@ namespace Folego
             };
         }
 
-        static readonly string[] OpcoesCelular = { "temp", "dns", "lixeira", "auto", "jogo", "jogo_ram", "jogo_prio", "jogo_reabrir" };
+        static readonly string[] OpcoesCelular = { "temp", "dns", "lixeira", "auto", "jogo", "jogo_ram", "jogo_prio", "jogo_reabrir", "jogo_acordado" };
 
         object AcaoCelular(string acao, Dictionary<string, object> d)
         {
@@ -1654,6 +1707,9 @@ namespace Folego
         // ---------------- Opções ----------------
         void ToggleOpt(string k)
         {
+            if (k == "anti_afk" && !opts[k] && MessageBox.Show(this,
+                    "O anti-AFK aperta espaço no jogo sozinho a cada ~15 minutos, quando você está parado, para o Roblox não te derrubar por inatividade.\n\nIsso é contra as regras do Roblox: sua conta pode ser punida. Ligar mesmo assim?",
+                    "Fôlego: anti-AFK", MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2) != DialogResult.Yes) return;
             opts[k] = !opts[k];
             Config.SetB(k, opts[k]);
             Engine.Log(k + ": " + (opts[k] ? "ligado" : "desligado"));
@@ -1910,6 +1966,7 @@ namespace Folego
             currentGame = j;
             gameBusy = true;
             if (opts["jogo_acordado"]) Acordado(true);
+            nextAfk = DateTime.Now.AddMinutes(12);
             gameStatus = "Preparando o PC...";
             Invalidate();
             bool ram = opts["jogo_ram"], prio = opts["jogo_prio"];
