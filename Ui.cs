@@ -19,7 +19,7 @@ namespace Folego
 {
     class MainForm : Form
     {
-        const string Versao = "0.3.0";
+        const string Versao = "0.4.0";
         const string Repo = "https://github.com/anthonymb1204/folego";
 
         // ---------------- Cores e fontes ----------------
@@ -31,7 +31,7 @@ namespace Folego
 
         const string GHome = "", GGame = "", GStart = "", GSettings = "", GShield = "",
             GMem = "", GCpu = "", GDrive = "", GPulse = "", GBroom = "", GPlay = "",
-            GClose = "", GAdd = "", GRefresh = "", GInfo = "";
+            GClose = "", GAdd = "", GRefresh = "", GInfo = "", GClock = "\uE823";
 
         static readonly CultureInfo Pt = new CultureInfo("pt-BR");
         static readonly string IconFamily = HasFont("Segoe Fluent Icons") ? "Segoe Fluent Icons" : "Segoe MDL2 Assets";
@@ -83,6 +83,10 @@ namespace Folego
         string currentGame, gameStatus;
         readonly List<string> reabrir = new List<string>();
         bool gameBusy;
+        int periodo;                            // Fôlego programado: minutos entre um e outro (0 = desligado)
+        DateTime nextRun = DateTime.MaxValue;
+        static readonly int[] Periodos = { 0, 15, 30, 60, 120 };
+        static readonly string[] PeriodoNomes = { "Desligado", "15 min", "30 min", "1 hora", "2 horas" };
 
         Timer tick, anim;
         int tickN;
@@ -100,6 +104,8 @@ namespace Folego
             for (int i = 0; i < OptDefs.GetLength(0); i++) opts[OptDefs[i, 0]] = Config.B(OptDefs[i, 0], OptDefs[i, 1] == "1");
             jogos = Config.L("jogos", "RobloxPlayerBeta");
             fechar = Config.L("fechar", "");
+            periodo = Config.I("periodo", 0);
+            ResetSchedule();
             SyncJogos();
 
             Text = "Fôlego " + Versao + (Engine.IsAdmin() ? " (administrador)" : "");
@@ -135,6 +141,7 @@ namespace Folego
             {
                 ReadStats();
                 tickN++;
+                if (periodo > 0 && !busy && DateTime.Now >= nextRun) RunOptimize("Programado");
                 if (tickN % 2 == 0) CheckGame();
                 if (tickN % 15 == 0 && page == 0 && Visible) RefreshList();
                 cpuDisp = cpuTarget; // a CPU muda o tempo todo: pula direto, sem animar
@@ -443,9 +450,18 @@ namespace Folego
 
             // Dar fôlego: o botão principal.
             Card(g, b, "Dar fôlego", GBroom);
+            if (periodo > 0)
+            {
+                string ag = PeriodoNome(periodo) + " · " + nextRun.ToString("HH:mm");
+                Font af = Reg(8.8f);
+                float aw = Measure(g, ag, af);
+                RectangleF ar = new RectangleF(b.Right - 20 - aw - 2, b.Y + 15, aw + 4, 28);
+                Txt(g, ag, af, CMuted, ar, StringAlignment.Far, StringAlignment.Center);
+                Txt(g, GClock, Ico(9f), CLilac, new RectangleF(ar.X - 20, b.Y + 15, 18, 28), StringAlignment.Far, StringAlignment.Center);
+            }
             float bx = b.X + b.Width / 2, by = b.Y + 98, BR = 40;
             RectangleF btn = new RectangleF(bx - BR, by - BR, 2 * BR, 2 * BR);
-            bool hov = AddHit(RectangleF.Inflate(btn, 6, 6), "go", delegate { RunOptimize(false); }, busy ? null : "Libera RAM e limpa o que estiver marcado");
+            bool hov = AddHit(RectangleF.Inflate(btn, 6, 6), "go", delegate { RunOptimize(null); }, busy ? null : "Libera RAM e limpa o que estiver marcado");
             if (hov || busy)
                 using (GraphicsPath gp = new GraphicsPath())
                 {
@@ -700,6 +716,30 @@ namespace Folego
             y += 50;
         }
 
+        // "Fôlego programado": botões Desligado / 15 min / 30 min / 1 hora / 2 horas.
+        void PeriodRow(Graphics g, RectangleF card, ref float y)
+        {
+            Txt(g, "Fôlego programado", Reg(10.5f), CText, new RectangleF(card.X + 20, y + 3, card.Width - 40, 22));
+            Txt(g, periodo > 0 ? "Próximo às " + nextRun.ToString("HH:mm") + " (nunca esvazia a lixeira sozinho)" : "De tempos em tempos, sozinho (nunca esvazia a lixeira)",
+                Reg(8.8f), CMuted, new RectangleF(card.X + 20, y + 25, card.Width - 40, 20));
+            Font f = Reg(9.2f);
+            float x = card.X + 20, py = y + 52;
+            for (int i = 0; i < Periodos.Length; i++)
+            {
+                int v = Periodos[i];
+                float w = Measure(g, PeriodoNomes[i], f) + 24;
+                RectangleF r = new RectangleF(x, py, w, 30);
+                bool on = periodo == v;
+                bool h = AddHit(r, "per" + v, delegate { SetPeriodo(v); }, null);
+                if (on) FillGrad(g, r, 15, CPurple, CBlue);
+                else Fill(g, r, 15, Color.FromArgb(h ? 40 : 22, 255, 255, 255));
+                if (!on) Stroke(g, r, 15, Color.FromArgb(50, 255, 255, 255));
+                Txt(g, PeriodoNomes[i], f, on ? Color.White : CText, r, StringAlignment.Center, StringAlignment.Center);
+                x += w + 6;
+            }
+            y += 92;
+        }
+
         void ActionRow(Graphics g, RectangleF card, ref float y, string id, string title, string desc, string btn, Action click, Color? btnColor = null)
         {
             Txt(g, title, Reg(10.5f), CText, new RectangleF(card.X + 20, y + 3, card.Width - 160, 22));
@@ -725,7 +765,7 @@ namespace Folego
         void DrawSettings(Graphics g)
         {
             float x0 = 116, W = ClientSize.Width - 24 - x0, half = (W - 16) / 2, top = 150;
-            RectangleF l = new RectangleF(x0, top, half, 268), r = new RectangleF(l.Right + 16, top, half, 268);
+            RectangleF l = new RectangleF(x0, top, half, 348), r = new RectangleF(l.Right + 16, top, half, 348);
             RectangleF s = new RectangleF(x0, l.Bottom + 16, W, ClientSize.Height - 20 - l.Bottom - 16);
 
             Card(g, l, "Dar fôlego", GBroom);
@@ -734,6 +774,7 @@ namespace Folego
             OptionRow(g, l, ref y, "dns", "Limpar cache de DNS", "Ajuda quando um site não abre");
             OptionRow(g, l, ref y, "lixeira", "Esvaziar a lixeira", "Cuidado: não dá para desfazer");
             OptionRow(g, l, ref y, "auto", "Automático", "Dá fôlego sozinho quando a RAM passa de 85%");
+            PeriodRow(g, l, ref y);
 
             Card(g, r, "Aparência e sistema", GSettings);
             y = r.Y + 52;
@@ -829,7 +870,7 @@ namespace Folego
             if (opts["auto"] && !busy && m.dwMemoryLoad >= 85 && (DateTime.Now - lastAuto).TotalMinutes >= 3)
             {
                 lastAuto = DateTime.Now;
-                RunOptimize(true);
+                RunOptimize("Automático");
             }
         }
 
@@ -843,6 +884,19 @@ namespace Folego
             if (k == "jogo" && !opts[k] && currentGame != null) EndGame();
             Invalidate();
         }
+
+        void ResetSchedule() { nextRun = periodo > 0 ? DateTime.Now.AddMinutes(periodo) : DateTime.MaxValue; }
+
+        void SetPeriodo(int min)
+        {
+            periodo = min;
+            Config.SetI("periodo", min);
+            ResetSchedule();
+            Engine.Log("Fôlego programado: " + (min > 0 ? "a cada " + PeriodoNome(min) : "desligado"));
+            Invalidate();
+        }
+
+        static string PeriodoNome(int min) { int i = Array.IndexOf(Periodos, min); return i >= 0 ? PeriodoNomes[i] : min + " min"; }
 
         void SyncJogos() { Engine.Jogos = new HashSet<string>(jogos, StringComparer.OrdinalIgnoreCase); }
 
@@ -972,13 +1026,16 @@ namespace Folego
             RefreshList();
         }
 
-        async void RunOptimize(bool auto)
+        // origem: null = botão; "Automático" = RAM acima de 85% (só RAM); "Programado" = de tempos em tempos.
+        async void RunOptimize(string origem)
         {
             if (busy) return;
             busy = true;
+            ResetSchedule();
+            bool auto = origem == "Automático", manual = origem == null;
             StartAnim();
             Invalidate();
-            bool temp = !auto && opts["temp"], dns = !auto && opts["dns"], bin = !auto && opts["lixeira"];
+            bool temp = !auto && opts["temp"], dns = !auto && opts["dns"], bin = manual && opts["lixeira"];
             double ram = 0; long bytes = 0; bool purged = false;
             await Task.Run(delegate
             {
@@ -988,7 +1045,7 @@ namespace Folego
                 if (dns) Engine.FlushDns();
                 if (bin) Engine.EmptyRecycleBin();
             });
-            string msg = string.Format(Pt, "{0}Liberou {1:0} MB de RAM", auto ? "Automático: " : "", Math.Max(0, ram));
+            string msg = string.Format(Pt, "{0}Liberou {1:0} MB de RAM", manual ? "" : origem + ": ", Math.Max(0, ram));
             if (purged) msg += " e limpou o cache de memória";
             if (temp) msg += string.Format(Pt, " · apagou {0:0} MB de temporários", bytes / 1048576.0);
             if (bin) msg += " · lixeira vazia";

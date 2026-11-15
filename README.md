@@ -17,7 +17,7 @@ Baixe o `Folego.exe` em [Releases](../../releases/latest) e dê dois cliques: n�
 
 **Modo Jogo:** quando um jogo da lista abre (vem com o Roblox), o jogo vai para prioridade alta, a RAM é liberada e os programas escolhidos fecham; quando o jogo fecha, eles voltam.
 
-**Ajustes:** o que o Dar fôlego limpa, o automático, o papel de parede no fundo (o do Windows, desfocado, ou roxo com montanhas), modo forte (admin) e o registro de atividades.
+**Ajustes:** o que o Dar fôlego limpa, o automático, o **Fôlego programado** (a cada 15 min, 30 min, 1 hora ou 2 horas), o papel de parede no fundo (o do Windows, desfocado, ou roxo com montanhas), modo forte (admin) e o registro de atividades.
 
 O **modo forte** (escudo no menu) limpa também o cache de memória e o Temp do Windows.
 

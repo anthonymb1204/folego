@@ -14,9 +14,9 @@ using Microsoft.Win32;
 
 [assembly: System.Reflection.AssemblyTitle("Fôlego")]
 [assembly: System.Reflection.AssemblyProduct("Fôlego")]
-[assembly: System.Reflection.AssemblyVersion("0.3.0.0")]
-[assembly: System.Reflection.AssemblyFileVersion("0.3.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersion("0.3.0")]
+[assembly: System.Reflection.AssemblyVersion("0.4.0.0")]
+[assembly: System.Reflection.AssemblyFileVersion("0.4.0.0")]
+[assembly: System.Reflection.AssemblyInformationalVersion("0.4.0")]
 
 namespace Folego
 {
@@ -117,6 +117,8 @@ namespace Folego
             return v.Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries).Select(s => s.Trim()).Where(s => s != "").ToList();
         }
         public static void SetL(string k, List<string> v) { D[k] = string.Join(";", v); Save(); }
+        public static int I(string k, int def) { string v; int n; return D.TryGetValue(k, out v) && int.TryParse(v, out n) ? n : def; }
+        public static void SetI(string k, int v) { D[k] = v.ToString(); Save(); }
     }
 
     // Tudo o que mexe no PC fica aqui.
