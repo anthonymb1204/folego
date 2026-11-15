@@ -19,7 +19,7 @@ namespace Folego
 {
     class MainForm : Form
     {
-        const string Versao = "0.2.3";
+        const string Versao = "0.3.0";
         const string Repo = "https://github.com/anthonymb1204/folego";
 
         // ---------------- Cores e fontes ----------------

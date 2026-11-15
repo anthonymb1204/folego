@@ -1,21 +1,31 @@
 # Fôlego
 
-"Dá um fôlego pro PC." (Até a 0.2.0 o app se chamava Otimizador.)
+"Dá um fôlego pro PC." Libera RAM, limpa lixo e prepara o Windows pro jogo, sem fechar nada que importa. (Até a 0.2.0 o app se chamava Otimizador.)
 
-App de um botão para o PC com Windows: libera RAM e limpa lixo sem fechar o jogo aberto. Baixe o `Folego.exe` em [Releases](../../releases/latest) e dê dois cliques, sem instalar nada.
+Baixe o `Folego.exe` em [Releases](../../releases/latest) e dê dois cliques: não precisa instalar nada.
 
-**Otimizar**
-- **Otimizar agora:** encolhe a RAM dos programas em segundo plano sem fechar nenhum (o Roblox, os jogos do Modo Jogo, o app da frente e o Windows ficam protegidos). Também limpa temporários com mais de 1 dia, cache de DNS e, se marcado, a lixeira.
-- **Modo forte (admin):** também limpa o cache de memória (lista de espera, como o RAMMap) e o Temp/Windows Update do Windows.
-- **Automático:** quando a RAM passa de 85%, otimiza sozinho (no máximo a cada 3 min). Minimizado, fica no canto da barra de tarefas.
-- **Programas que mais gastam RAM:** lista para você escolher o que fechar (pede confirmação; serviços do Windows não aparecem).
+## Telas
 
-**Inicialização** (0.2)
-- Lista os programas que abrem junto com o Windows, com liga/desliga. Funciona igual ao Gerenciador de Tarefas: nada é apagado, e dá para religar quando quiser.
+**Início**
+- **Memória:** anel com quanto da RAM está em uso (fica vermelho acima de 85%).
+- **Dar fôlego:** o botão principal. Encolhe a RAM dos programas em segundo plano sem fechar nenhum (o Roblox, os jogos do Modo Jogo, o app da frente e o Windows ficam protegidos) e, conforme os botõezinhos embaixo, apaga temporários com mais de 1 dia, limpa o cache de DNS e esvazia a lixeira.
+- **Sistema:** processador, disco C: e quanto o Fôlego já liberou hoje.
+- **Gastando mais RAM:** os programas que mais pesam, com ícone; passe o mouse e clique no × para fechar (pede confirmação).
+- **Modo Jogo e atividade de hoje.**
 
-**Modo Jogo** (0.2)
-- Quando um jogo da lista abre (vem com o Roblox), coloca o jogo em prioridade alta, libera RAM e fecha os programas que você escolher. Quando o jogo fecha, reabre esses programas.
+**Inicialização:** os programas que abrem com o Windows, com chave liga/desliga. Funciona igual ao Gerenciador de Tarefas: nada é apagado.
+
+**Modo Jogo:** quando um jogo da lista abre (vem com o Roblox), o jogo vai para prioridade alta, a RAM é liberada e os programas escolhidos fecham; quando o jogo fecha, eles voltam.
+
+**Ajustes:** o que o Dar fôlego limpa, o automático, o papel de parede no fundo (o do Windows, desfocado, ou roxo com montanhas), modo forte (admin) e o registro de atividades.
+
+O **modo forte** (escudo no menu) limpa também o cache de memória e o Temp do Windows.
 
 Tudo que o app faz fica em `folego_log.txt`, ao lado do .exe. As preferências ficam em `%APPDATA%\Folego\config.txt`.
 
-Compilar: `build.bat` (usa o C# que já vem no Windows).
+## Código
+
+- `Folego.cs`: o motor (memória, limpeza, inicialização, processos).
+- `Ui.cs`: a tela, toda desenhada à mão.
+- `icone/`: o ícone, desenhado em código (`build-icone.bat`).
+- Compilar: `build.bat` (usa o C# que já vem no Windows). Publicar uma versão: `./publicar.sh 0.4.0 notas.md`.
