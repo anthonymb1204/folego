@@ -20,7 +20,7 @@ namespace Folego
 {
     class MainForm : Form
     {
-        const string Versao = "0.9.2";
+        const string Versao = "0.10.0";
         const string Repo = "https://github.com/anthonymb1204/folego";
 
         // ---------------- Cores e fontes ----------------
@@ -97,7 +97,7 @@ namespace Folego
 
         static readonly string[,] OptDefs = {
             { "temp", "1" }, { "dns", "1" }, { "lixeira", "0" }, { "auto", "0" }, { "jogo", "1" },
-            { "jogo_ram", "1" }, { "jogo_prio", "1" }, { "jogo_reabrir", "1" }, { "fundo_wall", "1" }, { "escala_nitido", "1" }, { "celular", "0" } };
+            { "jogo_ram", "1" }, { "jogo_prio", "1" }, { "jogo_reabrir", "1" }, { "fundo_wall", "1" }, { "escala_nitido", "1" }, { "celular", "0" }, { "jogo_acordado", "1" }, { "anti_afk", "0" } };
 
         [DllImport("dwmapi.dll")] static extern int DwmSetWindowAttribute(IntPtr h, int attr, ref int val, int size);
 
@@ -163,6 +163,7 @@ namespace Folego
             FormClosed += delegate { tray.Visible = false; };
             FormClosed += delegate { Escala.Encerrar(); try { UnregisterHotKey(Handle, HotkeyEscala); } catch { } };
             FormClosed += delegate { if (remoto != null) remoto.Parar(); };
+            FormClosed += delegate { Acordado(false); };
             if (modo != Modo.Foto && opts["celular"]) StartCelular();
 
             LoadActivity();
@@ -727,7 +728,8 @@ namespace Folego
 
         static string Bonito(string proc)
         {
-            return proc.Equals("RobloxPlayerBeta", StringComparison.OrdinalIgnoreCase) ? "Roblox" : proc;
+            if (proc.Equals("RobloxPlayerBeta", StringComparison.OrdinalIgnoreCase)) return "Roblox";
+            return proc.EndsWith(".Root", StringComparison.OrdinalIgnoreCase) ? proc.Substring(0, proc.Length - 5) : proc;
         }
 
         void DrawAppIcon(Graphics g, string key, RectangleF r)
@@ -785,7 +787,7 @@ namespace Folego
         // ---------------- Modo Jogo ----------------
         void DrawGame(Graphics g)
         {
-            float x0 = 116, W = ClientSize.Width - 24 - x0, half = (W - 16) / 2, top = 150, H1 = 262;
+            float x0 = 116, W = ClientSize.Width - 24 - x0, half = (W - 16) / 2, top = 150, H1 = 196;
             RectangleF l1 = new RectangleF(x0, top, half, H1), r1 = new RectangleF(l1.Right + 16, top, half, H1);
             float top2 = l1.Bottom + 16, H2 = ClientSize.Height - 20 - top2;
             RectangleF l2 = new RectangleF(x0, top2, half, H2), r2 = new RectangleF(l1.Right + 16, top2, half, H2);
@@ -802,14 +804,28 @@ namespace Folego
             OptionRow(g, l2, ref y, "jogo_prio", "Prioridade alta para o jogo", "O Windows dá preferência ao jogo");
             OptionRow(g, l2, ref y, "jogo_reabrir", "Reabrir os fechados", "Quando o jogo acabar");
 
-            Card(g, r2, "Agora", GPulse);
+            Card(g, r2, "Agora e farm", GPulse);
             bool live = currentGame != null;
-            Txt(g, GGame, Ico(40f), live ? CGood : CFaint, new RectangleF(r2.X, r2.Y + 52, r2.Width, 70), StringAlignment.Center, StringAlignment.Center);
+            Txt(g, GGame, Ico(30f), live ? CGood : CFaint, new RectangleF(r2.X + 20, r2.Y + 54, 60, 60), StringAlignment.Center, StringAlignment.Center);
             Txt(g, live ? Bonito(currentGame) + " aberto" : (opts["jogo"] ? "Nenhum jogo aberto" : "Modo Jogo desligado"),
-                Semi(14f), CText, new RectangleF(r2.X, r2.Y + 128, r2.Width, 30), StringAlignment.Center);
+                Semi(13f), CText, new RectangleF(r2.X + 92, r2.Y + 54, r2.Width - 112, 28));
             string det = live ? (gameStatus ?? "Preparando o PC...")
                 : opts["jogo"] ? "De olho em: " + string.Join(", ", jogos.Select(Bonito)) : "Ligue nas Opções ao lado";
-            Txt(g, det, Reg(9.8f), live ? CGood : CMuted, new RectangleF(r2.X + 24, r2.Y + 164, r2.Width - 48, 60), StringAlignment.Center, StringAlignment.Near, true);
+            Txt(g, det, Reg(9.2f), live ? CGood : CMuted, new RectangleF(r2.X + 92, r2.Y + 82, r2.Width - 112, 40), StringAlignment.Near, StringAlignment.Near, true);
+            using (Pen ln = new Pen(Color.FromArgb(26, 255, 255, 255))) g.DrawLine(ln, r2.X + 20, r2.Y + 130, r2.Right - 20, r2.Y + 130);
+            float fy = r2.Y + 140;
+            OptionRow(g, r2, ref fy, "jogo_acordado", "PC acordado durante o jogo", "Não deixa o Windows dormir no meio do farm");
+        }
+
+        // ---- PC acordado: enquanto o jogo está aberto, o Windows não suspende/dorme por inatividade ----
+        [DllImport("kernel32.dll")] static extern uint SetThreadExecutionState(uint flags);
+        bool acordado;
+
+        void Acordado(bool on)
+        {
+            if (on == acordado) return;
+            acordado = on;
+            SetThreadExecutionState(on ? 0x80000001u : 0x80000000u); // ES_CONTINUOUS | ES_SYSTEM_REQUIRED
         }
 
         void ChipEditor(Graphics g, RectangleF card, List<string> data, string cfgKey, string hint)
@@ -1644,6 +1660,7 @@ namespace Folego
             if (k == "fundo_wall" && !bgBuilding) { if (bg != null) bg.Dispose(); bg = null; }
             if (k == "jogo" && !opts[k] && currentGame != null) EndGame();
             if (k == "celular") { if (opts[k]) StartCelular(); else StopCelular(); }
+            if (k == "jogo_acordado") Acordado(opts[k] && currentGame != null);
             Invalidate();
         }
 
@@ -1892,6 +1909,7 @@ namespace Folego
         {
             currentGame = j;
             gameBusy = true;
+            if (opts["jogo_acordado"]) Acordado(true);
             gameStatus = "Preparando o PC...";
             Invalidate();
             bool ram = opts["jogo_ram"], prio = opts["jogo_prio"];
@@ -1912,6 +1930,7 @@ namespace Folego
             reabrir.AddRange(caminhos);
             List<string> partes = new List<string>();
             if (prioN > 0) partes.Add("prioridade alta");
+            if (acordado) partes.Add("PC acordado");
             if (fechados.Count > 0) partes.Add("fechou " + string.Join(", ", fechados));
             if (ram) partes.Add(string.Format(Pt, "liberou {0:0} MB", Math.Max(0, mb)));
             gameStatus = Bonito(j) + " aberto" + (partes.Count > 0 ? " · " + string.Join(" · ", partes) : "");
@@ -1923,6 +1942,7 @@ namespace Folego
         {
             string j = currentGame;
             currentGame = null;
+            Acordado(false);
             gameStatus = null;
             List<string> abertos = new List<string>();
             if (opts["jogo_reabrir"])
