@@ -20,7 +20,7 @@ namespace Folego
 {
     class MainForm : Form
     {
-        const string Versao = "0.15.0";
+        const string Versao = "0.16.0";
         const string Repo = "https://github.com/anthonymb1204/folego";
 
         // ---------------- Cores e fontes ----------------
@@ -28,11 +28,11 @@ namespace Folego
             CFaint = Color.FromArgb(112, 110, 138), CCard = Color.FromArgb(172, 17, 15, 30), CBorder = Color.FromArgb(34, 255, 255, 255),
             CPurple = Color.FromArgb(139, 92, 246), CLilac = Color.FromArgb(178, 150, 255), CBlue = Color.FromArgb(59, 110, 246),
             CTeal = Color.FromArgb(45, 212, 191), CGood = Color.FromArgb(76, 201, 140), CBad = Color.FromArgb(239, 98, 98),
-            COrange = Color.FromArgb(251, 146, 60);
+            COrange = Color.FromArgb(251, 146, 60), CWarnSoft = Color.FromArgb(242, 200, 90);
 
         const string GHome = "", GGame = "", GStart = "", GSettings = "", GShield = "",
             GMem = "", GCpu = "", GDrive = "", GPulse = "", GBroom = "", GPlay = "",
-            GClose = "", GAdd = "", GRefresh = "", GInfo = "", GClock = "\uE823", GSpeed = "\uEC4A", GPhone = "\uE8EA", GBell = "\uEA8F";
+            GClose = "", GAdd = "", GRefresh = "", GInfo = "", GClock = "\uE823", GSpeed = "\uEC4A", GPhone = "\uE8EA", GBell = "\uEA8F", GNet = "\uE839";
 
         static readonly CultureInfo Pt = new CultureInfo("pt-BR");
         static readonly string IconFamily = HasFont("Segoe Fluent Icons") ? "Segoe Fluent Icons" : "Segoe MDL2 Assets";
@@ -185,6 +185,7 @@ namespace Folego
                 if (tickN % 5 == 0) CheckAntiAfk();
                 if (tickN % 30 == 10) CheckPesados();
                 if (tickN % 30 == 1) AmostraRam();
+                if (tickN % 5 == 2 && WindowState != FormWindowState.Minimized) MedirPing();
                 if (tickN % 3 == 0 || DateTime.Now >= wpSoon) { wpSoon = DateTime.MaxValue; CheckWallpaper(); }
                 if (tickN % 15 == 0 && page == 0 && Visible) RefreshList();
                 if (tickN % 3600 == 0) ChecarDriverAmd(false);
@@ -263,6 +264,7 @@ namespace Folego
             startItems = Engine.StartupItems();
             foreach (Engine.StartupItem it in startItems) icons["start:" + it.Nome] = IconFromFile(ExeFromCommand(it.Comando));
             System.Threading.Thread.Sleep(500);
+            for (int i = 0; i < 3; i++) MedirPingSync();
             ReadStats();
             if (Environment.GetCommandLineArgs().Contains("--demo")) // só para testar o desenho do histórico
                 for (int i = 0; i < HistMax; i++)
@@ -559,6 +561,12 @@ namespace Folego
             float W = ClientSize.Width;
             Txt(g, now.ToString("HH:mm"), Light(46f), CText, new RectangleF(W - 424, 4, 400, 86), StringAlignment.Far, StringAlignment.Near);
             Txt(g, now.ToString("dddd, d 'de' MMMM", Pt), Reg(10.5f), CMuted, new RectangleF(W - 424, 92, 400, 24), StringAlignment.Far);
+            // Internet: ping atual (como o Wi-Fi no launcher da TV).
+            string pt; Color pc;
+            PingTexto(out pt, out pc);
+            float pw = Measure(g, pt, Reg(9.5f)) + 6;
+            Txt(g, pt, Reg(9.5f), pc, new RectangleF(W - 24 - pw, 116, pw + 2, 20), StringAlignment.Far);
+            Txt(g, GNet, Ico(10f), pc, new RectangleF(W - 24 - pw - 22, 116, 18, 20), StringAlignment.Far, StringAlignment.Center);
         }
 
         void DrawTooltip(Graphics g)
@@ -1462,6 +1470,51 @@ namespace Folego
                     Reg(9.5f), celMsg != null ? COrange : CMuted, new RectangleF(sc.X + 20, sc.Y + 52, sc.Width - 40, 90), StringAlignment.Near, StringAlignment.Near, true);
         }
 
+        // ---------------- Internet: ping a cada 5 s (Cloudflare 1.1.1.1), últimas 12 medidas ----------------
+        readonly List<long> pings = new List<long>(); // -1 = sem resposta
+        bool pingando;
+
+        async void MedirPing()
+        {
+            if (pingando) return;
+            pingando = true;
+            long ms = await Task.Run(delegate
+            {
+                try
+                {
+                    using (System.Net.NetworkInformation.Ping p = new System.Net.NetworkInformation.Ping())
+                    {
+                        System.Net.NetworkInformation.PingReply r = p.Send("1.1.1.1", 2000);
+                        return r.Status == System.Net.NetworkInformation.IPStatus.Success ? r.RoundtripTime : -1L;
+                    }
+                }
+                catch { return -1L; }
+            });
+            pings.Add(ms);
+            if (pings.Count > 12) pings.RemoveAt(0);
+            pingando = false;
+        }
+
+        void MedirPingSync() // só para a foto (testes)
+        {
+            try { using (System.Net.NetworkInformation.Ping p = new System.Net.NetworkInformation.Ping()) { var r = p.Send("1.1.1.1", 2000); pings.Add(r.Status == System.Net.NetworkInformation.IPStatus.Success ? r.RoundtripTime : -1); } }
+            catch { pings.Add(-1); }
+        }
+
+        string PingResumo() { string t; Color c; PingTexto(out t, out c); return t; }
+
+        void PingTexto(out string texto, out Color cor)
+        {
+            if (pings.Count == 0) { texto = "medindo a internet..."; cor = CFaint; return; }
+            long ult = pings[pings.Count - 1];
+            List<long> ok = pings.Where(p => p >= 0).ToList();
+            if (ult < 0) { texto = ok.Count == 0 ? "sem internet" : "internet falhando"; cor = CBad; return; }
+            double media = ok.Average(), desvio = Math.Sqrt(ok.Average(p => (p - media) * (p - media)));
+            bool perdas = ok.Count < pings.Count, oscila = desvio > 25 || perdas;
+            texto = "ping " + ult + " ms" + (oscila ? " · oscilando" : "");
+            cor = oscila || ult >= 100 ? COrange : ult >= 60 ? CWarnSoft : CGood;
+        }
+
         // ---------------- Histórico de RAM (últimas 2 h, uma amostra a cada 30 s) ----------------
         readonly List<float> hist = new List<float>();
         readonly List<DateTime> histT = new List<DateTime>();
@@ -1742,6 +1795,7 @@ namespace Folego
                 { "opts", opts.ToDictionary(kv => kv.Key, kv => (object)kv.Value) },
                 { "periodo", periodo }, { "periodoTxt", PeriodoNome(periodo) }, { "proximo", periodo > 0 ? nextRun.ToString("HH:mm") : "" },
                 { "jogo", currentGame != null }, { "jogoStatus", st },
+                { "internet", PingResumo() },
                 { "top", consumers.Select(c => new Dictionary<string, object> { { "nome", c.Nome }, { "mb", c.Bytes / 1048576.0 } }).ToList() },
                 { "atividades", acts.AsEnumerable().Reverse().Take(8).Select(a => new Dictionary<string, object> {
                     { "hora", a.T.ToString("HH:mm") }, { "texto", a.Text }, { "cor", Hex(a.C) } }).ToList() },

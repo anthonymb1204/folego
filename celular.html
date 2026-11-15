@@ -142,6 +142,7 @@
       <h2>Sistema</h2>
       <div class="kv"><span>Processador</span><span id="cpu"></span></div><div class="bar"><i id="cpub"></i></div>
       <div class="kv"><span>Disco C:</span><span id="disco"></span></div><div class="bar"><i id="discob"></i></div>
+      <div class="kv" style="margin-bottom:12px"><span>Internet</span><span id="net"></span></div>
       <div class="kv"><span>Liberado hoje</span><span id="vezes"></span></div><div class="big" id="lib"></div>
     </div>
     <div class="card">
@@ -261,6 +262,7 @@ function render() {
   $("jogo").textContent = e.jogoStatus; $("jogo").classList.toggle("on", !!e.jogo);
   $("cpu").textContent = Math.round(e.cpu * 100) + "%"; $("cpub").style.width = (e.cpu * 100) + "%";
   $("disco").textContent = Math.round(e.discoLivre) + " GB livres"; $("discob").style.width = (e.discoUso * 100) + "%";
+  $("net").textContent = e.internet || "";
   $("lib").textContent = gb(e.liberado); $("vezes").textContent = e.vezes + (e.vezes === 1 ? " vez" : " vezes");
   const max = Math.max(1, ...e.top.map(t => t.mb));
   $("top").innerHTML = e.top.map(t => `<div class="it"><div class="n">${esc(t.nome)}<div class="bar" style="margin:4px 0 0"><i style="width:${t.mb / max * 100}%"></i></div></div>

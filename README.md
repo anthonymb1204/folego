@@ -19,6 +19,8 @@ Baixe o `Folego.exe` em [Releases](../../releases/latest) e dê dois cliques: n�
 
 **Mais FPS:** liga e desliga ajustes do Windows que ajudam o jogo (Modo de Jogo, sem gravação do Xbox em segundo plano, Edge sem rodar escondido, otimizações para jogos em janela), mostra a placa de vídeo e, nas placas AMD, o atalho do AFMF (geração de quadros) e o passo a passo para ligar AFMF, Anti-Lag e RSR no AMD Adrenalin. Nas placas AMD, o Fôlego confere a cada 12 horas (na página oficial da AMD) se saiu driver novo, mostra "em dia" ou "versão nova" e tem um botão para a página de download oficial da placa. Tem também a **escala nítida** (experimental): com o jogo numa janela menor, Ctrl+Alt+F estica a janela para a tela toda sem borrar (usa a ampliação do próprio Windows); sair do jogo desliga sozinha.
 
+**Internet:** no cabeçalho, embaixo da data, o ping atual (verde, amarelo ou laranja) e um aviso de "oscilando" quando a conexão varia muito, para saber se o lag é do PC ou da internet. Aparece também no celular.
+
 **Ajustes:** o que o Dar fôlego limpa, o automático, o **Fôlego programado** (a cada 15 min, 30 min, 1 hora ou 2 horas), o papel de parede no fundo (o do Windows, desfocado, ou roxo com montanhas), modo forte (admin) e o registro de atividades.
 
 O **modo forte** (escudo no menu) limpa também o cache de memória e o Temp do Windows.
