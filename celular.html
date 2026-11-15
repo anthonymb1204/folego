@@ -1,0 +1,305 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0e0c18">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="manifest" href="/manifest.json">
+<link rel="icon" href="/icone.png">
+<link rel="apple-touch-icon" href="/icone.png">
+<title>Fôlego</title>
+<style>
+  :root {
+    --text: #f2f1fa; --muted: #a8a6c0; --faint: #706e8a; --card: rgba(17,15,30,.72); --border: rgba(255,255,255,.13);
+    --purple: #8b5cf6; --lilac: #b296ff; --blue: #3b6ef6; --teal: #2dd4bf; --good: #4cc98c; --bad: #ef6262; --orange: #fb923c;
+    --grad: linear-gradient(135deg, var(--purple), var(--blue));
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  [hidden] { display: none !important; }
+  html, body { margin: 0; min-height: 100%; }
+  body {
+    background: #0e0c18 url(/fundo.jpg) center / cover fixed; color: var(--text);
+    font: 15px/1.4 "Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
+    padding: max(16px, env(safe-area-inset-top)) 16px calc(92px + env(safe-area-inset-bottom));
+  }
+  body::before { content: ""; position: fixed; inset: 0; background: rgba(10,8,22,.35); z-index: -1; }
+  h1 { font-weight: 300; font-size: 26px; margin: 4px 0 0; }
+  h1 b { font-weight: 600; color: var(--lilac); }
+  .top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; }
+  .sub { color: var(--muted); font-size: 13px; }
+  .clock { font-weight: 200; font-size: 40px; line-height: 1; text-align: right; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 22px; padding: 16px; margin-bottom: 14px;
+          backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
+  .card h2 { font-size: 15px; font-weight: 600; margin: 0 0 12px; display: flex; align-items: center; gap: 8px; }
+  .card h2 .r { margin-left: auto; font-weight: 400; color: var(--muted); font-size: 12.5px; }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .ring { position: relative; width: 140px; height: 140px; margin: 4px auto 8px; }
+  .ring svg { transform: rotate(-90deg); }
+  .ring .v { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; }
+  .ring .v b { font-weight: 300; font-size: 32px; }
+  .ring .v span { color: var(--muted); font-size: 12px; }
+  .center { text-align: center; }
+  .go { width: 104px; height: 104px; border-radius: 50%; border: 0; background: var(--grad); color: #fff; display: grid; place-items: center;
+        margin: 4px auto 10px; box-shadow: 0 0 40px rgba(139,92,246,.45); cursor: pointer; position: relative; }
+  .go svg { width: 38px; height: 38px; margin-left: 5px; }
+  .go.busy svg { display: none; }
+  .go.busy::after { content: ""; width: 54px; height: 54px; border-radius: 50%; border: 4px solid rgba(255,255,255,.25); border-top-color: #fff; animation: spin .8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .msg { color: var(--muted); font-size: 13px; min-height: 36px; }
+  .msg.ok { color: var(--good); }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin-top: 8px; }
+  .chip { border: 1px solid rgba(255,255,255,.2); background: transparent; color: var(--muted); border-radius: 999px; padding: 6px 12px; font: inherit; font-size: 13px; }
+  .chip.on { background: rgba(139,92,246,.3); border-color: rgba(178,150,255,.7); color: var(--text); }
+  .bar { height: 6px; border-radius: 3px; background: rgba(255,255,255,.12); overflow: hidden; margin: 6px 0 12px; }
+  .bar i { display: block; height: 100%; background: var(--grad); border-radius: 3px; transition: width .6s; }
+  .kv { display: flex; justify-content: space-between; font-size: 14px; }
+  .kv span:last-child { color: var(--muted); }
+  .big { font-size: 26px; font-weight: 600; color: var(--teal); }
+  .list .it { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-top: 1px solid rgba(255,255,255,.06); }
+  .list .it:first-child { border-top: 0; }
+  .list .n { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .list .d { color: var(--faint); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .list .mb { color: var(--muted); font-size: 13px; }
+  .x { width: 30px; height: 30px; border-radius: 50%; border: 0; background: rgba(255,255,255,.08); color: var(--muted); font-size: 16px; }
+  .act { display: flex; gap: 10px; padding: 7px 0; font-size: 13.5px; }
+  .act i { width: 3px; border-radius: 2px; flex: none; }
+  .act time { color: var(--muted); flex: none; width: 40px; }
+  .sw { position: relative; width: 48px; height: 28px; flex: none; border-radius: 14px; background: rgba(255,255,255,.2); border: 0; transition: background .2s; }
+  .sw::after { content: ""; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%; background: #fff; transition: left .2s; }
+  .sw.on { background: var(--grad); }
+  .sw.on::after { left: 23px; }
+  .opt { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid rgba(255,255,255,.06); }
+  .opt:first-of-type { border-top: 0; }
+  .opt div { flex: 1; }
+  .opt small { display: block; color: var(--muted); font-size: 12px; }
+  .seg { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .seg button { flex: 1 0 auto; border: 1px solid rgba(255,255,255,.18); background: rgba(255,255,255,.06); color: var(--text); border-radius: 999px; padding: 8px 10px; font: inherit; font-size: 13px; }
+  .seg button.on { background: var(--grad); border-color: transparent; }
+  .status { font-size: 13.5px; color: var(--muted); }
+  .status.on { color: var(--good); }
+  nav { position: fixed; left: 12px; right: 12px; bottom: max(12px, env(safe-area-inset-bottom)); display: flex; gap: 6px; padding: 6px;
+        background: rgba(17,15,30,.85); border: 1px solid var(--border); border-radius: 22px; backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
+  nav button { flex: 1; border: 0; background: transparent; color: var(--muted); border-radius: 16px; padding: 9px 4px; font: inherit; font-size: 12.5px; display: grid; justify-items: center; gap: 2px; }
+  nav button svg { width: 22px; height: 22px; }
+  nav button.on { background: var(--grad); color: #fff; }
+  .page { display: none; } .page.on { display: block; }
+  .pair { max-width: 360px; margin: 12vh auto 0; text-align: center; }
+  .pair img { width: 84px; height: 84px; border-radius: 20px; }
+  .pair input { width: 100%; font: inherit; font-size: 30px; letter-spacing: 10px; text-align: center; padding: 12px; border-radius: 16px;
+                border: 1px solid var(--border); background: rgba(0,0,0,.35); color: var(--text); margin: 16px 0 12px; }
+  .btn { width: 100%; border: 0; border-radius: 16px; padding: 14px; font: inherit; font-weight: 600; color: #fff; background: var(--grad); }
+  .btn.ghost { background: rgba(255,255,255,.08); border: 1px solid var(--border); font-weight: 400; }
+  .err { color: var(--orange); min-height: 22px; font-size: 13.5px; }
+  .off { position: fixed; top: 10px; left: 50%; transform: translateX(-50%); background: var(--orange); color: #111; padding: 6px 14px; border-radius: 999px; font-size: 13px; display: none; }
+</style>
+</head>
+<body>
+<div class="off" id="off">Sem conexão com o PC</div>
+
+<section id="parear" class="pair" hidden>
+  <img src="/icone.png" alt="">
+  <h1>Conectar ao <b>Fôlego</b></h1>
+  <p class="sub">No PC, abra o Fôlego → Ajustes → No celular e digite o código que aparece lá.</p>
+  <input id="codigo" inputmode="numeric" maxlength="6" placeholder="000000" autocomplete="one-time-code">
+  <div class="err" id="perr"></div>
+  <button class="btn" id="pbtn">Conectar</button>
+</section>
+
+<main id="app" hidden>
+  <div class="top">
+    <div><div class="sub" id="pc">Fôlego</div><h1 id="sauda">Olá</h1></div>
+    <div><div class="clock" id="hora">--:--</div><div class="sub" style="text-align:right" id="data"></div></div>
+  </div>
+
+  <section class="page on" id="p0">
+    <div class="row2">
+      <div class="card center">
+        <h2>Memória</h2>
+        <div class="ring"><svg width="140" height="140" viewBox="0 0 140 140">
+          <defs><linearGradient id="g1" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8b5cf6"/><stop offset="1" stop-color="#3b6ef6"/></linearGradient>
+                <linearGradient id="g2" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ef6262"/><stop offset="1" stop-color="#fb923c"/></linearGradient></defs>
+          <circle cx="70" cy="70" r="60" fill="none" stroke="rgba(255,255,255,.12)" stroke-width="11"/>
+          <circle id="arc" cx="70" cy="70" r="60" fill="none" stroke="url(#g1)" stroke-width="11" stroke-linecap="round" stroke-dasharray="377" stroke-dashoffset="377" style="transition:stroke-dashoffset .6s"/>
+        </svg><div class="v"><b id="ram">--%</b><span>em uso</span></div></div>
+        <div class="sub" id="ramtxt"></div>
+      </div>
+      <div class="card center">
+        <h2>Dar fôlego</h2>
+        <button class="go" id="go" aria-label="Dar fôlego agora"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></button>
+        <div class="msg" id="msg"></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="chips" id="chips"></div>
+    </div>
+    <div class="card">
+      <h2>Modo Jogo <span class="r"><button class="sw" id="swjogo" aria-label="Modo Jogo"></button></span></h2>
+      <div class="status" id="jogo"></div>
+    </div>
+    <div class="card">
+      <h2>Sistema</h2>
+      <div class="kv"><span>Processador</span><span id="cpu"></span></div><div class="bar"><i id="cpub"></i></div>
+      <div class="kv"><span>Disco C:</span><span id="disco"></span></div><div class="bar"><i id="discob"></i></div>
+      <div class="kv"><span>Liberado hoje</span><span id="vezes"></span></div><div class="big" id="lib"></div>
+    </div>
+    <div class="card">
+      <h2>Gastando mais RAM</h2>
+      <div class="list" id="top"></div>
+    </div>
+    <div class="card">
+      <h2>Atividade de hoje</h2>
+      <div id="acts"></div>
+    </div>
+  </section>
+
+  <section class="page" id="p1">
+    <div class="card">
+      <h2>Inicialização <span class="r" id="inits"></span></h2>
+      <div class="sub" style="margin-bottom:6px">Desligar não desinstala nada. Vale na próxima vez que o PC ligar.</div>
+      <div class="list" id="init"></div>
+    </div>
+  </section>
+
+  <section class="page" id="p2">
+    <div class="card">
+      <h2>Dar fôlego</h2>
+      <div id="optsA"></div>
+      <div class="opt" style="display:block"><div>Fôlego programado<small id="progtxt"></small></div><div class="seg" id="seg"></div></div>
+    </div>
+    <div class="card">
+      <h2>Modo Jogo</h2>
+      <div id="optsB"></div>
+    </div>
+    <div class="card">
+      <h2>Este celular</h2>
+      <p class="sub">Conectado ao <span id="pc2"></span>. Fora de casa, funciona pelo Tailscale (instalado no PC e no celular).</p>
+      <button class="btn ghost" id="sair">Desconectar este celular</button>
+    </div>
+  </section>
+</main>
+
+<nav id="nav" hidden>
+  <button class="on" data-p="0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>Início</button>
+  <button data-p="1"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M12 15V8m-3 3l3-3 3 3"/></svg>Inicialização</button>
+  <button data-p="2"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>Ajustes</button>
+</nav>
+
+<script>
+const $ = id => document.getElementById(id);
+let token = null, estado = null, pagina = 0;
+try { token = localStorage.getItem("folego_token"); } catch (e) {}
+
+function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
+function gb(mb) { return mb >= 1024 ? (mb / 1024).toFixed(1).replace(".", ",") + " GB" : Math.round(mb) + " MB"; }
+
+async function api(caminho, corpo) {
+  const r = await fetch(caminho, { method: corpo ? "POST" : "GET", headers: { "Content-Type": "application/json", "X-Folego-Token": token || "" },
+                                   body: corpo ? JSON.stringify(corpo) : undefined, cache: "no-store" });
+  if (r.status === 401 && caminho !== "/api/parear") { desconectar(); throw new Error("401"); }
+  return r.json();
+}
+const acao = (a, extra) => api("/api/acao", Object.assign({ acao: a }, extra || {}));
+
+function mostrar() {
+  $("parear").hidden = !!token; $("app").hidden = !token; $("nav").hidden = !token;
+  if (token) atualizar();
+}
+function desconectar() { token = null; try { localStorage.removeItem("folego_token"); } catch (e) {} mostrar(); }
+
+$("pbtn").onclick = async () => {
+  $("perr").textContent = "";
+  try {
+    const r = await api("/api/parear", { codigo: $("codigo").value.trim() });
+    if (r.token) { token = r.token; try { localStorage.setItem("folego_token", token); } catch (e) {} mostrar(); }
+    else $("perr").textContent = r.erro || "Não deu certo.";
+  } catch (e) { $("perr").textContent = "Não achei o PC. O celular está no mesmo Wi-Fi?"; }
+};
+$("codigo").addEventListener("keyup", e => { if (e.key === "Enter") $("pbtn").click(); });
+
+document.querySelectorAll("nav button").forEach(b => b.onclick = () => {
+  pagina = +b.dataset.p;
+  document.querySelectorAll("nav button").forEach(x => x.classList.toggle("on", x === b));
+  document.querySelectorAll(".page").forEach((p, i) => p.classList.toggle("on", i === pagina));
+  if (pagina === 1) carregarInit();
+  window.scrollTo(0, 0);
+});
+
+$("go").onclick = async () => { $("go").classList.add("busy"); try { await acao("folego"); } catch (e) {} setTimeout(atualizar, 400); };
+$("swjogo").onclick = () => opcao("jogo", !estado.opts.jogo);
+$("sair").onclick = async () => { try { await acao("sair"); } catch (e) {} desconectar(); };
+
+async function opcao(k, v) { estado.opts[k] = v; render(); try { await acao("opcao", { chave: k, valor: v }); } catch (e) {} atualizar(); }
+
+const OPTS_A = [["temp", "Limpar temporários", "Só os com mais de 1 dia"], ["dns", "Limpar cache de DNS", "Ajuda quando um site não abre"],
+                ["lixeira", "Esvaziar a lixeira", "Cuidado: não dá para desfazer"], ["auto", "Automático", "Quando a RAM passa de 85%"]];
+const OPTS_B = [["jogo", "Modo Jogo ligado", "Entra sozinho quando o jogo abre"], ["jogo_ram", "Liberar RAM", "E o cache de memória"],
+                ["jogo_prio", "Prioridade alta", "O Windows dá preferência ao jogo"], ["jogo_reabrir", "Reabrir os fechados", "Quando o jogo acabar"]];
+const PERIODOS = [[0, "Desligado"], [15, "15 min"], [30, "30 min"], [60, "1 hora"], [120, "2 horas"]];
+
+function optRows(el, lista) {
+  el.innerHTML = lista.map(([k, t, d]) => `<div class="opt"><div>${t}<small>${d}</small></div><button class="sw ${estado.opts[k] ? "on" : ""}" data-k="${k}" aria-label="${t}"></button></div>`).join("");
+  el.querySelectorAll(".sw").forEach(b => b.onclick = () => opcao(b.dataset.k, !estado.opts[b.dataset.k]));
+}
+
+function render() {
+  const e = estado; if (!e) return;
+  $("pc").textContent = "Fôlego · " + e.pc; $("pc2").textContent = e.pc;
+  $("sauda").innerHTML = esc(e.saudacao) + ", <b>" + esc(e.nome) + "</b>";
+  $("hora").textContent = e.hora; $("data").textContent = e.data;
+  const ram = e.ram; $("ram").textContent = Math.round(ram * 100) + "%";
+  $("arc").style.strokeDashoffset = 377 * (1 - ram); $("arc").setAttribute("stroke", ram > .85 ? "url(#g2)" : "url(#g1)");
+  $("ramtxt").textContent = e.ramLivre.toFixed(1).replace(".", ",") + " GB livres de " + e.ramTotal.toFixed(1).replace(".", ",") + " GB";
+  $("go").classList.toggle("busy", !!e.ocupado);
+  $("msg").textContent = e.msg; $("msg").classList.toggle("ok", !!e.msgOk);
+  $("chips").innerHTML = [["temp", "Temporários"], ["dns", "DNS"], ["lixeira", "Lixeira"], ["auto", "Auto 85%"]]
+    .map(([k, t]) => `<button class="chip ${e.opts[k] ? "on" : ""}" data-k="${k}">${t}</button>`).join("") +
+    (e.periodo ? `<span class="chip" style="border-style:dashed">⏱ ${esc(e.periodoTxt)}</span>` : "");
+  $("chips").querySelectorAll("button").forEach(b => b.onclick = () => opcao(b.dataset.k, !e.opts[b.dataset.k]));
+  $("swjogo").classList.toggle("on", !!e.opts.jogo);
+  $("jogo").textContent = e.jogoStatus; $("jogo").classList.toggle("on", !!e.jogo);
+  $("cpu").textContent = Math.round(e.cpu * 100) + "%"; $("cpub").style.width = (e.cpu * 100) + "%";
+  $("disco").textContent = Math.round(e.discoLivre) + " GB livres"; $("discob").style.width = (e.discoUso * 100) + "%";
+  $("lib").textContent = gb(e.liberado); $("vezes").textContent = e.vezes + (e.vezes === 1 ? " vez" : " vezes");
+  const max = Math.max(1, ...e.top.map(t => t.mb));
+  $("top").innerHTML = e.top.map(t => `<div class="it"><div class="n">${esc(t.nome)}<div class="bar" style="margin:4px 0 0"><i style="width:${t.mb / max * 100}%"></i></div></div>
+      <span class="mb">${gb(t.mb)}</span><button class="x" data-n="${esc(t.nome)}" aria-label="Fechar">×</button></div>`).join("") || '<div class="sub">Carregando...</div>';
+  $("top").querySelectorAll(".x").forEach(b => b.onclick = async () => {
+    if (!confirm('Fechar "' + b.dataset.n + '" no PC? O que não estiver salvo nele será perdido.')) return;
+    try { const r = await acao("fechar", { nome: b.dataset.n }); if (r.erro) alert(r.erro); } catch (x) {} atualizar();
+  });
+  $("acts").innerHTML = e.atividades.map(a => `<div class="act"><i style="background:${a.cor}"></i><time>${a.hora}</time><span>${esc(a.texto)}</span></div>`).join("") ||
+    '<div class="sub">Nada ainda hoje.</div>';
+  optRows($("optsA"), OPTS_A); optRows($("optsB"), OPTS_B);
+  $("progtxt").textContent = e.periodo ? "Próximo às " + e.proximo + " (nunca esvazia a lixeira)" : "De tempos em tempos, sozinho";
+  $("seg").innerHTML = PERIODOS.map(([m, t]) => `<button class="${e.periodo === m ? "on" : ""}" data-m="${m}">${t}</button>`).join("");
+  $("seg").querySelectorAll("button").forEach(b => b.onclick = async () => { e.periodo = +b.dataset.m; render(); try { await acao("periodo", { min: +b.dataset.m }); } catch (x) {} atualizar(); });
+}
+
+async function carregarInit() {
+  try {
+    const r = await acao("inicializacao_lista");
+    $("inits").textContent = r.itens.filter(i => i.ligado).length + " de " + r.itens.length + " ligados";
+    $("init").innerHTML = r.itens.map((i, n) => `<div class="it"><div class="n">${esc(i.nome)}<div class="d">${i.todos ? "Todos" : "Só você"} · ${esc(i.cmd)}</div></div>
+        <button class="sw ${i.ligado ? "on" : ""}" data-i="${n}" aria-label="${esc(i.nome)}"></button></div>`).join("");
+    $("init").querySelectorAll(".sw").forEach(b => b.onclick = async () => {
+      const it = r.itens[+b.dataset.i]; b.classList.toggle("on");
+      const res = await acao("inicializacao", { nome: it.nome, ligado: !it.ligado });
+      if (res.erro) alert(res.erro);
+      carregarInit();
+    });
+  } catch (e) {}
+}
+
+async function atualizar() {
+  if (!token) return;
+  try { estado = await api("/api/estado"); $("off").style.display = "none"; render(); }
+  catch (e) { if (token) $("off").style.display = "block"; }
+}
+setInterval(atualizar, 3000);
+document.addEventListener("visibilitychange", () => { if (!document.hidden) atualizar(); });
+mostrar();
+</script>
+</body>
+</html>

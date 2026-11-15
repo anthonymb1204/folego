@@ -19,7 +19,7 @@ namespace Folego
 {
     class MainForm : Form
     {
-        const string Versao = "0.6.0";
+        const string Versao = "0.7.0";
         const string Repo = "https://github.com/anthonymb1204/folego";
 
         // ---------------- Cores e fontes ----------------
@@ -31,7 +31,7 @@ namespace Folego
 
         const string GHome = "", GGame = "", GStart = "", GSettings = "", GShield = "",
             GMem = "", GCpu = "", GDrive = "", GPulse = "", GBroom = "", GPlay = "",
-            GClose = "", GAdd = "", GRefresh = "", GInfo = "", GClock = "\uE823", GSpeed = "\uEC4A";
+            GClose = "", GAdd = "", GRefresh = "", GInfo = "", GClock = "\uE823", GSpeed = "\uEC4A", GPhone = "\uE8EA";
 
         static readonly CultureInfo Pt = new CultureInfo("pt-BR");
         static readonly string IconFamily = HasFont("Segoe Fluent Icons") ? "Segoe Fluent Icons" : "Segoe MDL2 Assets";
@@ -96,7 +96,7 @@ namespace Folego
 
         static readonly string[,] OptDefs = {
             { "temp", "1" }, { "dns", "1" }, { "lixeira", "0" }, { "auto", "0" }, { "jogo", "1" },
-            { "jogo_ram", "1" }, { "jogo_prio", "1" }, { "jogo_reabrir", "1" }, { "fundo_wall", "1" }, { "escala_nitido", "1" } };
+            { "jogo_ram", "1" }, { "jogo_prio", "1" }, { "jogo_reabrir", "1" }, { "fundo_wall", "1" }, { "escala_nitido", "1" }, { "celular", "0" } };
 
         [DllImport("dwmapi.dll")] static extern int DwmSetWindowAttribute(IntPtr h, int attr, ref int val, int size);
 
@@ -117,6 +117,7 @@ namespace Folego
             jogos = Config.L("jogos", "RobloxPlayerBeta");
             fechar = Config.L("fechar", "");
             periodo = Config.I("periodo", 0);
+            tokens = Config.L("tokens", "");
             ResetSchedule();
             SyncJogos();
 
@@ -160,6 +161,8 @@ namespace Folego
             FormClosed += delegate { Microsoft.Win32.SystemEvents.UserPreferenceChanged -= wpHandler; };
             FormClosed += delegate { tray.Visible = false; };
             FormClosed += delegate { Escala.Encerrar(); try { UnregisterHotKey(Handle, HotkeyEscala); } catch { } };
+            FormClosed += delegate { if (remoto != null) remoto.Parar(); };
+            if (modo != Modo.Foto && opts["celular"]) StartCelular();
 
             LoadActivity();
             Native.GetSystemTimes(out lastIdle, out lastKernel, out lastUser);
@@ -523,10 +526,7 @@ namespace Folego
             float x = 116;
             if (title == null)
             {
-                int hr = DateTime.Now.Hour;
-                string sauda = hr < 5 ? "Boa noite" : hr < 12 ? "Bom dia" : hr < 18 ? "Boa tarde" : "Boa noite";
-                string nome = Environment.UserName;
-                if (nome.Length > 0) nome = char.ToUpper(nome[0]) + nome.Substring(1);
+                string sauda = Saudacao(), nome = NomeUsuario();
                 Txt(g, sauda + ",", Light(24f), CText, new RectangleF(x, 14, 600, 46));
                 Txt(g, nome, Semi(24f), CLilac, new RectangleF(x, 52, 600, 46));
                 Txt(g, "Libera  ·  Limpa  ·  Joga", Reg(10.5f), CMuted, new RectangleF(x + 2, 100, 600, 24));
@@ -1181,12 +1181,196 @@ namespace Folego
             ActionRow(g, r, ref y, "slog", "Registro de atividades", "Tudo que o Fôlego fez, com data e hora", "Abrir", OpenLog);
             ActionRow(g, r, ref y, "sgit", "Versão " + Versao, "Novidades e downloads no GitHub", "GitHub", delegate { OpenUrl(Repo); });
 
-            Card(g, s, null, null);
-            if (appIcon != null) g.DrawImage(appIcon, s.X + 26, s.Y + (s.Height - 72) / 2, 72, 72);
-            Txt(g, "Fôlego", Semi(20f), CText, new RectangleF(s.X + 120, s.Y + s.Height / 2 - 46, 500, 40));
+            RectangleF sa = new RectangleF(s.X, s.Y, half, s.Height), sc = new RectangleF(s.X + half + 16, s.Y, half, s.Height);
+            Card(g, sa, null, null);
+            if (appIcon != null) g.DrawImage(appIcon, sa.X + 24, sa.Y + (sa.Height - 64) / 2, 64, 64);
+            Txt(g, "Fôlego", Semi(18f), CText, new RectangleF(sa.X + 104, sa.Y + sa.Height / 2 - 44, 300, 36));
             Txt(g, "Dá um fôlego pro PC: libera RAM, limpa lixo e prepara o Windows pro jogo, sem fechar nada que importa.",
-                Reg(10f), CMuted, new RectangleF(s.X + 122, s.Y + s.Height / 2 - 4, s.Width - 150, 44), StringAlignment.Near, StringAlignment.Near, true);
+                Reg(9.5f), CMuted, new RectangleF(sa.X + 106, sa.Y + sa.Height / 2 - 6, sa.Width - 126, 60), StringAlignment.Near, StringAlignment.Near, true);
+
+            // No celular
+            Card(g, sc, "No celular", GPhone);
+            RectangleF ctg = new RectangleF(sc.Right - 66, sc.Y + 17, 46, 24);
+            Toggle(g, ctg, opts["celular"], AddHit(ctg, "tgcel", delegate { ToggleOpt("celular"); }, opts["celular"] ? "Desligar o acesso pelo celular" : "Ligar o acesso pelo celular"));
+            if (remoto != null && remoto.Rodando)
+            {
+                string ip = Remoto.IpLocal() ?? "IP do PC";
+                Txt(g, "No navegador do celular (mesmo Wi-Fi), abra:", Reg(9.2f), CMuted, new RectangleF(sc.X + 20, sc.Y + 50, sc.Width - 40, 20));
+                Txt(g, "http://" + ip + ":" + Remoto.Porta, Semi(14f), CLilac, new RectangleF(sc.X + 20, sc.Y + 70, sc.Width - 40, 30));
+                Txt(g, "Código para conectar:", Reg(9.2f), CMuted, new RectangleF(sc.X + 20, sc.Y + 104, 200, 22));
+                string cod = remoto.Codigo ?? "";
+                Txt(g, cod.Length == 6 ? cod.Substring(0, 3) + " " + cod.Substring(3) : cod, Semi(22f), CText, new RectangleF(sc.X + 18, sc.Y + 122, 200, 40));
+                Font bf = Reg(9f);
+                string b1 = "Novo código", b2 = "Desconectar celulares (" + tokens.Count + ")";
+                float w1 = Measure(g, b1, bf) + 26, w2 = Measure(g, b2, bf) + 26;
+                RectangleF r1b = new RectangleF(sc.Right - 20 - w2 - 8 - w1, sc.Y + 130, w1, 28), r2b = new RectangleF(sc.Right - 20 - w2, sc.Y + 130, w2, 28);
+                bool h1 = AddHit(r1b, "celcod", delegate { remoto.NovoCodigo(); Invalidate(); }, "Gera outro código");
+                bool h2 = AddHit(r2b, "celout", delegate { tokens.Clear(); Config.SetL("tokens", tokens); AddActivity(DateTime.Now, "Celulares desconectados", true); Invalidate(); },
+                    "Os celulares precisam do código de novo");
+                Fill(g, r1b, 14, Color.FromArgb(h1 ? 50 : 26, 255, 255, 255)); Txt(g, b1, bf, CText, r1b, StringAlignment.Center, StringAlignment.Center);
+                Fill(g, r2b, 14, Color.FromArgb(h2 ? 50 : 26, 255, 255, 255)); Txt(g, b2, bf, CText, r2b, StringAlignment.Center, StringAlignment.Center);
+            }
+            else
+                Txt(g, celMsg ?? "Controle o Fôlego pelo celular, no Wi-Fi de casa (fora de casa, pelo Tailscale). Pede o modo forte, para liberar no firewall só em redes privadas.",
+                    Reg(9.5f), celMsg != null ? COrange : CMuted, new RectangleF(sc.X + 20, sc.Y + 52, sc.Width - 40, 90), StringAlignment.Near, StringAlignment.Near, true);
         }
+
+        // ---------------- Celular ----------------
+        Remoto remoto;
+        List<string> tokens;
+        string celMsg;
+        byte[] iconePng;
+
+        string Saudacao()
+        {
+            int hr = DateTime.Now.Hour;
+            return hr < 5 ? "Boa noite" : hr < 12 ? "Bom dia" : hr < 18 ? "Boa tarde" : "Boa noite";
+        }
+
+        static string NomeUsuario()
+        {
+            string n = Environment.UserName;
+            return n.Length > 0 ? char.ToUpper(n[0]) + n.Substring(1) : n;
+        }
+
+        void StartCelular()
+        {
+            celMsg = null;
+            if (remoto != null && remoto.Rodando) return;
+            if (!Engine.IsAdmin()) { celMsg = "Precisa do modo forte (o escudo no menu) para liberar o Fôlego no firewall."; Invalidate(); return; }
+            if (!Remoto.LiberarFirewall()) Engine.Log("Celular: não consegui criar a regra do firewall");
+            remoto = new Remoto(this)
+            {
+                Estado = EstadoCelular,
+                Acao = AcaoCelular,
+                TokenValido = t => !string.IsNullOrEmpty(t) && tokens.Contains(t),
+                Icone = () =>
+                {
+                    if (iconePng == null && Icon != null)
+                        using (Icon ic = new Icon(Icon, 256, 256))
+                        using (Bitmap b = new Bitmap(192, 192))
+                        using (MemoryStream ms = new MemoryStream())
+                        {
+                            using (Graphics g = Graphics.FromImage(b)) { g.InterpolationMode = InterpolationMode.HighQualityBicubic; g.DrawIcon(ic, new Rectangle(0, 0, 192, 192)); }
+                            b.Save(ms, ImageFormat.Png);
+                            iconePng = ms.ToArray();
+                        }
+                    return iconePng;
+                },
+                Fundo = () =>
+                {
+                    if (bg == null) { wpStamp = WallStamp(); bg = BuildBackground(ClientSize); }
+                    using (MemoryStream ms = new MemoryStream()) { bg.Save(ms, ImageFormat.Jpeg); return ms.ToArray(); }
+                },
+            };
+            try
+            {
+                remoto.Iniciar();
+                Engine.Log("Celular: ligado em http://" + (Remoto.IpLocal() ?? "?") + ":" + Remoto.Porta);
+            }
+            catch (Exception ex) { celMsg = "Não deu para ligar: a porta " + Remoto.Porta + " está ocupada."; Engine.Log("Celular: " + ex.Message); remoto = null; }
+            Invalidate();
+        }
+
+        void StopCelular()
+        {
+            if (remoto != null) remoto.Parar();
+            remoto = null;
+            celMsg = null;
+            if (Engine.IsAdmin()) Remoto.FecharFirewall();
+            Engine.Log("Celular: desligado");
+            Invalidate();
+        }
+
+        static string Hex(Color c) { return "#" + c.R.ToString("x2") + c.G.ToString("x2") + c.B.ToString("x2"); }
+
+        Dictionary<string, object> EstadoCelular()
+        {
+            string st;
+            if (currentGame != null) st = "● " + (gameStatus ?? Bonito(currentGame) + " aberto");
+            else if (opts["jogo"]) st = "Esperando " + string.Join(", ", jogos.Select(Bonito)) + " abrir";
+            else st = "Desligado";
+            return new Dictionary<string, object> {
+                { "pc", Environment.MachineName }, { "nome", NomeUsuario() }, { "saudacao", Saudacao() },
+                { "hora", DateTime.Now.ToString("HH:mm") }, { "data", DateTime.Now.ToString("dddd, d 'de' MMMM", Pt) },
+                { "ram", ramTarget }, { "ramLivre", ramFree }, { "ramTotal", ramTotal }, { "cpu", cpuTarget },
+                { "discoLivre", diskFree }, { "discoUso", diskTotal > 0 ? 1 - diskFree / diskTotal : 0 },
+                { "liberado", freedTodayMB }, { "vezes", runsToday }, { "ocupado", busy },
+                { "msg", lastMsg }, { "msgOk", lastMsgColor == CGood },
+                { "opts", opts.ToDictionary(kv => kv.Key, kv => (object)kv.Value) },
+                { "periodo", periodo }, { "periodoTxt", PeriodoNome(periodo) }, { "proximo", periodo > 0 ? nextRun.ToString("HH:mm") : "" },
+                { "jogo", currentGame != null }, { "jogoStatus", st },
+                { "top", consumers.Select(c => new Dictionary<string, object> { { "nome", c.Nome }, { "mb", c.Bytes / 1048576.0 } }).ToList() },
+                { "atividades", acts.AsEnumerable().Reverse().Take(8).Select(a => new Dictionary<string, object> {
+                    { "hora", a.T.ToString("HH:mm") }, { "texto", a.Text }, { "cor", Hex(a.C) } }).ToList() },
+            };
+        }
+
+        static readonly string[] OpcoesCelular = { "temp", "dns", "lixeira", "auto", "jogo", "jogo_ram", "jogo_prio", "jogo_reabrir" };
+
+        object AcaoCelular(string acao, Dictionary<string, object> d)
+        {
+            Dictionary<string, object> ok = new Dictionary<string, object> { { "ok", true } };
+            object v;
+            switch (acao)
+            {
+                case "novo_token":
+                    tokens.Add(Convert.ToString(d["token"]));
+                    Config.SetL("tokens", tokens);
+                    AddActivity(DateTime.Now, "Celular conectado", true);
+                    Invalidate();
+                    return ok;
+                case "sair":
+                    if (d.TryGetValue("_token", out v)) { tokens.Remove(Convert.ToString(v)); Config.SetL("tokens", tokens); }
+                    Invalidate();
+                    return ok;
+                case "folego":
+                    RunOptimize("Celular");
+                    return ok;
+                case "opcao":
+                    {
+                        string k = d.TryGetValue("chave", out v) ? Convert.ToString(v) : "";
+                        if (!OpcoesCelular.Contains(k) || !d.TryGetValue("valor", out v)) return Erro("opção inválida");
+                        if (opts[k] != Convert.ToBoolean(v)) ToggleOpt(k);
+                        return ok;
+                    }
+                case "periodo":
+                    {
+                        int min = d.TryGetValue("min", out v) ? Convert.ToInt32(v) : -1;
+                        if (!Periodos.Contains(min)) return Erro("intervalo inválido");
+                        SetPeriodo(min);
+                        return ok;
+                    }
+                case "fechar":
+                    {
+                        string nome = d.TryGetValue("nome", out v) ? Convert.ToString(v) : "";
+                        if (!consumers.Any(c => c.Nome == nome)) return Erro("Esse programa não está na lista.");
+                        int n = Engine.Kill(nome);
+                        if (n == 0) return Erro("Não deu para fechar " + nome + ".");
+                        AddActivity(DateTime.Now, "Fechou " + nome + " (pelo celular)", true);
+                        RefreshList();
+                        return ok;
+                    }
+                case "inicializacao_lista":
+                    return new Dictionary<string, object> { { "ok", true }, { "itens", Engine.StartupItems().Select(i => new Dictionary<string, object> {
+                        { "nome", i.Nome }, { "ligado", i.Ligado }, { "todos", i.Todos }, { "cmd", i.Comando } }).ToList() } };
+                case "inicializacao":
+                    {
+                        string nome = d.TryGetValue("nome", out v) ? Convert.ToString(v) : "";
+                        bool ligado = d.TryGetValue("ligado", out v) && Convert.ToBoolean(v);
+                        Engine.StartupItem it = Engine.StartupItems().FirstOrDefault(i => i.Nome == nome);
+                        if (it == null) return Erro("Não achei esse programa.");
+                        try { Engine.SetStartup(it, ligado); }
+                        catch { return Erro("Esse abre para todos os usuários: ligue o modo forte no PC."); }
+                        AddActivity(DateTime.Now, "Inicialização: " + nome + (ligado ? " ligado" : " desligado") + " (pelo celular)", true);
+                        LoadStartup();
+                        return ok;
+                    }
+            }
+            return Erro("ação desconhecida");
+        }
+
+        static Dictionary<string, object> Erro(string msg) { return new Dictionary<string, object> { { "ok", false }, { "erro", msg } }; }
 
         // ---------------- Mouse ----------------
         Hit HitAt(Point p)
@@ -1278,6 +1462,7 @@ namespace Folego
             Engine.Log(k + ": " + (opts[k] ? "ligado" : "desligado"));
             if (k == "fundo_wall" && !bgBuilding) { if (bg != null) bg.Dispose(); bg = null; }
             if (k == "jogo" && !opts[k] && currentGame != null) EndGame();
+            if (k == "celular") { if (opts[k]) StartCelular(); else StopCelular(); }
             Invalidate();
         }
 

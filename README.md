@@ -23,6 +23,8 @@ Baixe o `Folego.exe` em [Releases](../../releases/latest) e dê dois cliques: n�
 
 O **modo forte** (escudo no menu) limpa também o cache de memória e o Temp do Windows.
 
+**No celular:** nos Ajustes, ligue "No celular" (pede o modo forte, para liberar o Fôlego no firewall só em redes privadas). No navegador do celular, no mesmo Wi-Fi, abra o endereço que aparece (ex.: `http://192.168.0.59:47474`) e digite o código de 6 dígitos. Dá para dar fôlego, ver a RAM, ligar e desligar as opções, o Modo Jogo, o programado, a inicialização e fechar programas. Use "Adicionar à tela inicial" para virar um ícone de app. Fora de casa, funciona pelo Tailscale. Só responde a aparelhos da rede local, cada código vale uma vez e 5 erros travam o pareamento por 5 minutos.
+
 **Sem atrapalhar o jogo:** com algo automático ligado (automático, programado ou Modo Jogo), fechar no X ou minimizar deixa o Fôlego no cantinho da barra de tarefas (botão direito no ícone: Abrir, Dar fôlego agora, Sair). Os fôlegos automáticos não mostram avisos nem abrem a janela, e erros vão para o registro. `Folego.exe --bandeja` abre direto no cantinho, sem janela. O fundo acompanha o papel de parede do Windows quando ele muda.
 
 Tudo que o app faz fica em `folego_log.txt`, ao lado do .exe. As preferências ficam em `%APPDATA%\Folego\config.txt`.
@@ -32,5 +34,6 @@ Tudo que o app faz fica em `folego_log.txt`, ao lado do .exe. As preferências f
 - `Folego.cs`: o motor (memória, limpeza, inicialização, processos).
 - `Ui.cs`: a tela, toda desenhada à mão.
 - `Escala.cs`: a escala nítida (ampliação do Windows).
+- `Remoto.cs` e `celular.html`: o servidor e a página do celular (vai dentro do .exe).
 - `icone/`: o ícone, desenhado em código (`build-icone.bat`).
 - Compilar: `build.bat` (usa o C# que já vem no Windows). Publicar uma versão: `./publicar.sh 0.4.0 notas.md`.
