@@ -23,7 +23,7 @@ Baixe o `Folego.exe` em [Releases](../../releases/latest) e dê dois cliques: n�
 
 O **modo forte** (escudo no menu) limpa também o cache de memória e o Temp do Windows.
 
-**No celular:** nos Ajustes, ligue "No celular" (pede o modo forte, para liberar o Fôlego no firewall só em redes privadas). No navegador do celular, no mesmo Wi-Fi, abra o endereço que aparece (ex.: `http://192.168.0.59:47474`) e digite o código de 6 dígitos. Dá para dar fôlego, ver a RAM, ligar e desligar as opções, o Modo Jogo, o programado, a inicialização e fechar programas. Use "Adicionar à tela inicial" para virar um ícone de app. Fora de casa, funciona pelo Tailscale. Só responde a aparelhos da rede local, cada código vale uma vez e 5 erros travam o pareamento por 5 minutos.
+**No celular:** nos Ajustes, ligue "No celular" (pede o modo forte, para liberar o Fôlego no firewall só em redes privadas). Aponte a câmera do celular para o QR code que aparece: ele abre o painel e conecta sozinho. Ou No navegador do celular, no mesmo Wi-Fi, abra o endereço que aparece (ex.: `http://192.168.0.59:47474`) e digite o código de 6 dígitos. Dá para dar fôlego, ver a RAM, ligar e desligar as opções, o Modo Jogo, o programado, a inicialização e fechar programas. Use "Adicionar à tela inicial" para virar um ícone de app. Fora de casa, funciona pelo Tailscale. Só responde a aparelhos da rede local, cada código vale uma vez e 5 erros travam o pareamento por 5 minutos.
 
 **Atualização:** o Fôlego confere no GitHub a cada 6 horas se saiu versão nova; aparece uma bolinha nos Ajustes e o botão **Atualizar** baixa, troca e abre de novo sozinho (nunca com jogo aberto).
 
@@ -39,5 +39,6 @@ Tudo que o app faz fica em `folego_log.txt`, ao lado do .exe. As preferências f
 - `Ui.cs`: a tela, toda desenhada à mão.
 - `Escala.cs`: a escala nítida (ampliação do Windows).
 - `Remoto.cs` e `celular.html`: o servidor e a página do celular (vai dentro do .exe).
+- `Qr.cs`: gerador de QR code próprio (sem bibliotecas).
 - `icone/`: o ícone, desenhado em código (`build-icone.bat`).
 - Compilar: `build.bat` (usa o C# que já vem no Windows). Publicar uma versão: `./publicar.sh 0.4.0 notas.md`.

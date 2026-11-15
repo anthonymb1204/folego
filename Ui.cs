@@ -20,7 +20,7 @@ namespace Folego
 {
     class MainForm : Form
     {
-        const string Versao = "0.14.0";
+        const string Versao = "0.15.0";
         const string Repo = "https://github.com/anthonymb1204/folego";
 
         // ---------------- Cores e fontes ----------------
@@ -1424,19 +1424,34 @@ namespace Folego
             Card(g, sc, "No celular", GPhone);
             RectangleF ctg = new RectangleF(sc.Right - 66, sc.Y + 17, 46, 24);
             Toggle(g, ctg, opts["celular"], AddHit(ctg, "tgcel", delegate { ToggleOpt("celular"); }, opts["celular"] ? "Desligar o acesso pelo celular" : "Ligar o acesso pelo celular"));
-            if (remoto != null && remoto.Rodando)
+            bool demoCel = modo == Modo.Foto && Environment.GetCommandLineArgs().Contains("--demo");
+            if ((remoto != null && remoto.Rodando) || demoCel)
             {
                 string ip = Remoto.IpLocal() ?? "IP do PC";
-                Txt(g, "No navegador do celular (mesmo Wi-Fi), abra:", Reg(9.2f), CMuted, new RectangleF(sc.X + 20, sc.Y + 50, sc.Width - 40, 20));
-                Txt(g, "http://" + ip + ":" + Remoto.Porta, Semi(14f), CLilac, new RectangleF(sc.X + 20, sc.Y + 70, sc.Width - 40, 30));
-                Txt(g, "Código para conectar:", Reg(9.2f), CMuted, new RectangleF(sc.X + 20, sc.Y + 104, 200, 22));
-                string cod = remoto.Codigo ?? "";
-                Txt(g, cod.Length == 6 ? cod.Substring(0, 3) + " " + cod.Substring(3) : cod, Semi(22f), CText, new RectangleF(sc.X + 18, sc.Y + 122, 200, 40));
-                Font bf = Reg(9f);
-                string b1 = "Novo código", b2 = "Desconectar celulares (" + tokens.Count + ")";
-                float w1 = Measure(g, b1, bf) + 26, w2 = Measure(g, b2, bf) + 26;
-                RectangleF r1b = new RectangleF(sc.Right - 20 - w2 - 8 - w1, sc.Y + 130, w1, 28), r2b = new RectangleF(sc.Right - 20 - w2, sc.Y + 130, w2, 28);
-                bool h1 = AddHit(r1b, "celcod", delegate { remoto.NovoCodigo(); Invalidate(); }, "Gera outro código");
+                string cod = remoto != null ? (remoto.Codigo ?? "") : "123456";
+                string url = "http://" + ip + ":" + Remoto.Porta;
+                // QR code: já leva o código, então o celular abre e conecta sozinho.
+                float qs = Math.Min(sc.Height - 62, 140);
+                RectangleF qr = new RectangleF(sc.Right - 20 - qs, sc.Y + 48, qs, qs);
+                string qrTxt = url + "/#c=" + cod;
+                if (qrTxt != qrTexto) { if (qrImg != null) qrImg.Dispose(); qrImg = null; try { qrImg = Qr.Imagem(qrTxt, 400); } catch { } qrTexto = qrTxt; }
+                if (qrImg != null)
+                {
+                    Fill(g, qr, 10, Color.White);
+                    g.InterpolationMode = InterpolationMode.NearestNeighbor;
+                    g.DrawImage(qrImg, RectangleF.Inflate(qr, -3, -3));
+                    g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                }
+                float lw = qr.X - sc.X - 36;
+                Txt(g, "Aponte a câmera do celular para o QR, ou abra no navegador (mesmo Wi-Fi):", Reg(8.8f), CMuted, new RectangleF(sc.X + 20, sc.Y + 48, lw, 34), StringAlignment.Near, StringAlignment.Near, true);
+                Txt(g, url, Semi(11.5f), CLilac, new RectangleF(sc.X + 20, sc.Y + 82, lw, 24));
+                Txt(g, "e digite o código:", Reg(8.8f), CMuted, new RectangleF(sc.X + 20, sc.Y + 106, lw, 18));
+                Txt(g, cod.Length == 6 ? cod.Substring(0, 3) + " " + cod.Substring(3) : cod, Semi(18f), CText, new RectangleF(sc.X + 18, sc.Y + 122, lw, 34));
+                Font bf = Reg(8.8f);
+                string b1 = "Novo código", b2 = "Desconectar (" + tokens.Count + ")";
+                float w1 = Measure(g, b1, bf) + 22, w2 = Measure(g, b2, bf) + 22;
+                RectangleF r1b = new RectangleF(sc.X + 20, sc.Bottom - 38, w1, 26), r2b = new RectangleF(sc.X + 20 + w1 + 6, sc.Bottom - 38, w2, 26);
+                bool h1 = AddHit(r1b, "celcod", delegate { if (remoto != null) remoto.NovoCodigo(); Invalidate(); }, "Gera outro código");
                 bool h2 = AddHit(r2b, "celout", delegate { tokens.Clear(); Config.SetL("tokens", tokens); AddActivity(DateTime.Now, "Celulares desconectados", true); Invalidate(); },
                     "Os celulares precisam do código de novo");
                 Fill(g, r1b, 14, Color.FromArgb(h1 ? 50 : 26, 255, 255, 255)); Txt(g, b1, bf, CText, r1b, StringAlignment.Center, StringAlignment.Center);
@@ -1645,6 +1660,8 @@ namespace Folego
         List<string> tokens;
         string celMsg;
         byte[] iconePng;
+        string qrTexto;
+        Bitmap qrImg;
 
         string Saudacao()
         {

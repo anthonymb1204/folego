@@ -300,6 +300,15 @@ async function atualizar() {
 setInterval(atualizar, 3000);
 document.addEventListener("visibilitychange", () => { if (!document.hidden) atualizar(); });
 mostrar();
+// Aberto pelo QR code do PC (#c=123456): preenche o código e conecta sozinho.
+(function () {
+  const m = location.hash.match(/c=(\d{6})/);
+  if (!m) return;
+  history.replaceState(null, "", location.pathname);
+  if (token) return;
+  $("codigo").value = m[1];
+  $("pbtn").click();
+})();
 </script>
 </body>
 </html>

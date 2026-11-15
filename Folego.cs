@@ -14,9 +14,9 @@ using Microsoft.Win32;
 
 [assembly: System.Reflection.AssemblyTitle("Fôlego")]
 [assembly: System.Reflection.AssemblyProduct("Fôlego")]
-[assembly: System.Reflection.AssemblyVersion("0.14.0.0")]
-[assembly: System.Reflection.AssemblyFileVersion("0.14.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersion("0.14.0")]
+[assembly: System.Reflection.AssemblyVersion("0.15.0.0")]
+[assembly: System.Reflection.AssemblyFileVersion("0.15.0.0")]
+[assembly: System.Reflection.AssemblyInformationalVersion("0.15.0")]
 
 namespace Folego
 {
