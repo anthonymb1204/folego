@@ -20,7 +20,7 @@ namespace Folego
 {
     class MainForm : Form
     {
-        const string Versao = "0.11.1";
+        const string Versao = "0.12.0";
         const string Repo = "https://github.com/anthonymb1204/folego";
 
         // ---------------- Cores e fontes ----------------
@@ -186,6 +186,9 @@ namespace Folego
                 if (tickN % 3 == 0 || DateTime.Now >= wpSoon) { wpSoon = DateTime.MaxValue; CheckWallpaper(); }
                 if (tickN % 15 == 0 && page == 0 && Visible) RefreshList();
                 if (tickN % 3600 == 0) ChecarDriverAmd(false);
+                if (tickN == 20 || tickN % 21600 == 0) ChecarAtualizacao(); // 20 s depois de abrir e a cada 6 h
+                if (testeUpd && tickN == 5) ChecarAtualizacao();          // --testar-atualizacao: confere e atualiza sozinho (testes)
+                if (testeUpd && novaVersao != null && !atualizando) Atualizar();
                 cpuDisp = cpuTarget; // a CPU muda o tempo todo: pula direto, sem animar
                 if (Math.Abs(ramTarget - ramDisp) > 0.01) StartAnim(); else ramDisp = ramTarget;
                 if (Visible && WindowState != FormWindowState.Minimized) Invalidate();
@@ -517,6 +520,8 @@ namespace Folego
                 if (page == i) FillGrad(g, r, 15, CPurple, CBlue);
                 else if (hov) Fill(g, r, 15, Color.FromArgb(28, 255, 255, 255));
                 Txt(g, gl[i], Ico(15f), page == i ? Color.White : (hov ? CText : CMuted), r, StringAlignment.Center, StringAlignment.Center);
+                if (i == gl.Length - 1 && novaVersao != null) // bolinha: tem versão nova nos Ajustes
+                    using (SolidBrush dot = new SolidBrush(COrange)) g.FillEllipse(dot, r.Right - 13, r.Y + 7, 9, 9);
             }
 
             bool admin = Engine.IsAdmin();
@@ -1385,7 +1390,12 @@ namespace Folego
             ActionRow(g, r, ref y, "sadmin", "Modo forte", admin ? "Limpa também o cache de memória e o Temp do Windows" : "Limpa mais, mas pede permissão de administrador",
                 admin ? "Ligado" : "Ligar", admin ? null : (Action)RelaunchAdmin);
             ActionRow(g, r, ref y, "slog", "Registro de atividades", "Tudo que o Fôlego fez, com data e hora", "Abrir", OpenLog);
-            ActionRow(g, r, ref y, "sgit", "Versão " + Versao, "Novidades e downloads no GitHub", "GitHub", delegate { OpenUrl(Repo); });
+            if (novaVersao != null)
+                ActionRow(g, r, ref y, "supd", "Versão " + Versao + " → " + novaVersao, updMsg ?? "Versão nova! As novidades estão no GitHub",
+                    atualizando ? "Atualizando..." : "Atualizar", atualizando ? null : (Action)Atualizar, COrange);
+            else
+                ActionRow(g, r, ref y, "sgit", "Versão " + Versao, updChecado > DateTime.MinValue ? "Em dia · conferido às " + updChecado.ToString("HH:mm") : "Novidades e downloads no GitHub",
+                    "GitHub", delegate { OpenUrl(Repo); });
 
             RectangleF sa = new RectangleF(s.X, s.Y, half, s.Height), sc = new RectangleF(s.X + half + 16, s.Y, half, s.Height);
             Card(g, sa, null, null);
@@ -1419,6 +1429,87 @@ namespace Folego
             else
                 Txt(g, celMsg ?? "Controle o Fôlego pelo celular, no Wi-Fi de casa (fora de casa, pelo Tailscale). Pede o modo forte, para liberar no firewall só em redes privadas.",
                     Reg(9.5f), celMsg != null ? COrange : CMuted, new RectangleF(sc.X + 20, sc.Y + 52, sc.Width - 40, 90), StringAlignment.Near, StringAlignment.Near, true);
+        }
+
+        // ---------------- Atualização dentro do app (Releases do GitHub) ----------------
+        string novaVersao, novaUrl, updMsg;
+        bool atualizando;
+        DateTime updChecado = DateTime.MinValue;
+        static readonly bool testeUpd = Environment.GetCommandLineArgs().Contains("--testar-atualizacao");
+
+        async void ChecarAtualizacao()
+        {
+            Dictionary<string, object> rel = await Task.Run(delegate
+            {
+                try
+                {
+                    ServicePointManager.SecurityProtocol |= (SecurityProtocolType)3072;
+                    HttpWebRequest req = (HttpWebRequest)WebRequest.Create("https://api.github.com/repos/anthonymb1204/folego/releases/latest");
+                    req.UserAgent = "Folego/" + Versao;
+                    req.Accept = "application/vnd.github+json";
+                    req.Timeout = 20000;
+                    using (WebResponse resp = req.GetResponse())
+                    using (StreamReader sr = new StreamReader(resp.GetResponseStream()))
+                        return new System.Web.Script.Serialization.JavaScriptSerializer().Deserialize<Dictionary<string, object>>(sr.ReadToEnd());
+                }
+                catch { return null; }
+            });
+            if (rel == null) return;
+            updChecado = DateTime.Now;
+            string tag = (Convert.ToString(rel["tag_name"]) ?? "").TrimStart('v');
+            Version nv, atual;
+            if (!Version.TryParse(tag, out nv) || !Version.TryParse(Versao, out atual) || nv <= atual) { novaVersao = null; Invalidate(); return; }
+            string url = null;
+            System.Collections.ArrayList assets = rel["assets"] as System.Collections.ArrayList;
+            if (assets != null)
+                foreach (object o in assets)
+                {
+                    Dictionary<string, object> a = o as Dictionary<string, object>;
+                    if (a != null && Convert.ToString(a["name"]) == "Folego.exe") url = Convert.ToString(a["browser_download_url"]);
+                }
+            if (url == null) return;
+            if (novaVersao != tag) AddActivity(DateTime.Now, "Versão nova do Fôlego: " + tag + " (Ajustes → Atualizar)", true);
+            novaVersao = tag; novaUrl = url;
+            Invalidate();
+        }
+
+        // Baixa a versão nova, confere que é ela mesma, troca o .exe (depois que este fechar) e abre de novo.
+        async void Atualizar()
+        {
+            if (novaUrl == null || atualizando) return;
+            if (currentGame != null) { updMsg = "Feche o jogo primeiro: não atualizo no meio da partida."; Invalidate(); return; }
+            atualizando = true; updMsg = "Baixando a " + novaVersao + "..."; Invalidate();
+            string versao = novaVersao, tmp = Path.Combine(Path.GetTempPath(), "Folego_" + versao + ".exe");
+            bool ok = await Task.Run(delegate
+            {
+                try
+                {
+                    ServicePointManager.SecurityProtocol |= (SecurityProtocolType)3072;
+                    using (WebClient wc = new WebClient())
+                    {
+                        wc.Headers[HttpRequestHeader.UserAgent] = "Folego/" + Versao;
+                        wc.DownloadFile(novaUrl, tmp);
+                    }
+                    return FileVersionInfo.GetVersionInfo(tmp).ProductVersion == versao;
+                }
+                catch { return false; }
+            });
+            if (!ok) { atualizando = false; updMsg = "Não deu para baixar. Tente de novo mais tarde."; Invalidate(); return; }
+
+            string exe = Application.ExecutablePath, cmd = Path.Combine(Path.GetTempPath(), "folego_atualizar.cmd");
+            int pid = Process.GetCurrentProcess().Id;
+            File.WriteAllText(cmd,
+                "@echo off\r\n" +
+                ":espera\r\n" +
+                "tasklist /fi \"PID eq " + pid + "\" | find \"" + pid + "\" >nul && (timeout /t 1 /nobreak >nul & goto espera)\r\n" +
+                "copy /y \"" + tmp + "\" \"" + exe + "\" >nul\r\n" +
+                "start \"\" \"" + exe + "\"" + (Visible ? "" : " --bandeja") + "\r\n" +
+                "del \"" + tmp + "\"\r\n" +
+                "del \"%~f0\"\r\n", System.Text.Encoding.Default);
+            AddActivity(DateTime.Now, "Atualizando o Fôlego para a " + versao, true);
+            Process.Start(new ProcessStartInfo("cmd.exe", "/c \"" + cmd + "\"") { CreateNoWindow = true, UseShellExecute = false, WindowStyle = ProcessWindowStyle.Hidden });
+            exiting = true;
+            Close();
         }
 
         // ---------------- Abrir com o Windows ----------------
